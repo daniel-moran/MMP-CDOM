@@ -14,3 +14,7 @@ Any updates or improvements to the scripts can be pushed to the repo for future 
 
 Additional detail on intended use and protocols will be added here and are also documented in header details 
 of the scripts.
+
+for help setting up github and using repos start here:
+https://pcinereus.github.io/SUYRs_documents/005_setup.html AND
+https://happygitwithr.com/
