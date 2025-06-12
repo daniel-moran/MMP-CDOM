@@ -1,0 +1,583 @@
+---
+title: "CDOM data batches - collate the data, check for drift and apply corrections"
+autput: html_document
+author: "Daniel Moran"
+organisation: "AIMS"
+date:   "14/04/2021"
+update: 20/05/2020 to include drift corrections and apply absorbant coefficient calcs to corrected data
+update: 03/12/2020 to apply modeled data over a narrower range. 350-680nm. objective is to provide a better modeled fit.
+update: 06/01/2021 to change scan plots with wavelgth on the x axis instead of deltaLambda. and collate CDOM443 values from modeled outputs based on the corrected data
+update: 29/04/2021 review by Alex Macadam to bring up to R version 4.0.5 and RStudio version 1.4.1106 and format for RMarkdown. 
+update: 07/04/2021 to include R2 value for each scan/model.
+update: 17/05/2021 removed unused code and added R2 values to graph headers
+update: 18/05/2021 added clear environment in line 33
+update: 06/07/2021 combined modelled443 and R2 into the model443 outputs csv. moved this file to outputs/data.
+update: 10/02/2023 added additional details to the upfront instructions.
+
+update: 10/05/2023 This script includes an extra chunck of code to reset the baseline for all the scans in this batch - the actual baseline was taken before the instrument had stabilised so the actual blanks and scans had drifted from the zero baseline - fortunalty the actual blanks and samples were scanned after the instrument had stabilised and the output data could be ~corrected to a zero baseline - using the initial blank as the baseline offset. Also see comments and records in the batch folder for further details
+
+User to use R version 4.0.5 and Rstudio version 1.4.1106
+Combine multiple .csv files from a batch of UV-Vis spec outputs into a single data table
+Run this script first
+User must: 
+: IN WINDOWS EXPLORER
+: -copy script to the working directory and add batch information to the script filename eg. "CDOM processing_WQQ_v20210517_b20200928.Rmd"
+: -create "extra" folder in the working directory and move run notes, a backup of the raw data and any additional files to this folder.
+: IN the R SCRIPT FOR THIS BATCH
+: -change the wd
+: -change the file string information in "pwd" used for generating filenames - i.e. "C:\Users\dmoran\OneDrive -Australian Institute of Marine Science\WFH\CDOM data\2019-20 report\" in this script
+generally only will need to be done for each years' processing if you are not moving the data.
+N.B.
+data files should only include files that have been auto-exported from the Shimadzu UV-1900 UV-Vis spec.
+R for windows does not like '\' so you will need to replace all the '\' in the filepath with '/'
+
+copy file path here:
+R:\Lagoon_WQ\results\CDOM\2022-23 report\CDOM-20230116_WQQ667-671
+---
+
+## Set the working directory
+###MUST change '\' to '/' in path
+```{r, include=FALSE}
+rm(list=ls())
+setwd("R:/Lagoon_WQ/results/CDOM/2022-23 report/CDOM-20230116_WQQ667-671")
+wd <- getwd()
+pwd<- "R:/Lagoon_WQ/results/CDOM/2022-23 report"
+```
+
+
+## Create some folders in the wd for saving outputs
+```{r, include= FALSE}
+{dir.create(file.path(wd,"outputs"))
+dir.create(file.path(wd,"outputs","plots"))
+dir.create(file.path(wd,"outputs","data"))
+}
+```
+
+## create lists of all files in the wd
+```{r, include= FALSE}
+library(rlist)
+{file_list <- list.files(wd, pattern=".csv", full.names=FALSE)
+# list blanks 
+file_list3 <- file_list[grep("illi",file_list)]
+# list files that are real samples, not milliq blanks
+file_list2 <- setdiff(file_list, file_list3)}
+```
+
+## list sample names (i.e. without .csv or other suffix)
+```{r, include=FALSE}
+{samples_list <- gsub("_RawData.csv","",file_list2)
+# list blanks sample names
+blanks_list <- gsub("_RawData.csv","",file_list3)
+rm(file_list2)
+rm(file_list3)
+}
+```
+
+## Import all the CSVs in the wd to a single dataframe - also could consider the read_bulk function from the 'readbulk' package
+## Create a "Filename" column containing the file name associated with each row
+```{r, include= FLASE}
+library(plyr)
+
+# create a dataframe for the merged data
+CDOM_comp<-data.frame()
+
+# now append all the data from the different csv files to this dataframe
+for (x in file_list){
+  if (exists("CDOM_comp")){
+    temp_dataset <-ldply(x, read.csv, header=FALSE, skip=39, sep=',',col.names=c('Wavelength_nm','Absorbance'))
+    temp_dataset$Filename = factor(x)
+    CDOM_comp <- rbind(CDOM_comp, temp_dataset)
+    rm(temp_dataset)
+  }
+  
+}
+```
+
+## create a second data frame that shows the date/time stamp for analysis of each sample
+```{r, include= FLASE}
+for (x in list.files(pattern="*.csv")){
+  # create a dataframe for the merged data
+  if (!exists("Analysis_times")){
+    Analysis_times<-c()
+  }
+  
+  # now append all the data from the different csv files to this dataframe
+  if (exists("Analysis_times")){
+    temp_dataset <-ldply(x, read.csv, header=FALSE, skip=8, nrows=1, sep=',',col.names=c('title','Analysis_time','Filename'))
+    temp_dataset$title <- NULL
+    temp_dataset$Filename = factor(x)
+    Analysis_times <- rbind(Analysis_times, temp_dataset)
+    rm(temp_dataset)
+  }
+  
+}
+```
+
+## merge the dataframes by Filename
+```{r, include= FLASE}
+{CDOM_data <- merge(CDOM_comp, Analysis_times, by=c("Filename"), all=TRUE)
+CDOM_comp <- NULL
+rm(CDOM_comp)
+Analysis_times <- NULL
+rm(Analysis_times)
+
+## write a list of sample names based on the file names but without the "_RawData.csv" suffix
+Sample <- gsub("_RawData.csv","",CDOM_data$Filename)
+
+## substitute "Filename" with "Sample" 
+CDOM_data$Sample <- Sample
+CDOM_data$Filename <- NULL
+rm(Sample)
+## Create a "batch" column containing the processing date for this batch of samples
+Batch_info <- read.csv(x)
+Batch_dt <- Batch_info[8,]
+Batch_date <- as.Date(Batch_dt, format = "%d/%m/%Y")
+CDOM_data$Batch <- Batch_date
+Batch_info <- NULL
+rm(Batch_info)
+rm(Batch_dt)
+rm(Batch_date)
+## order by Analysis_time
+#what are the data formats for each column?
+sapply(CDOM_data, class)
+#convert analysis_time from factor to POSIXct time format
+temp <- as.POSIXct(CDOM_data$Analysis_time, format = "%d/%m/%Y %I:%M:%S %p") #note $I is for 12hr time, %H is for 24 hr time
+CDOM_data$Analysis_time <- NULL
+CDOM_data$Analysis_time <- temp
+rm(temp)
+sapply(CDOM_data, class)
+#order by analysis_time
+CDOM_data <- CDOM_data[order(CDOM_data$Analysis_time),]
+}
+```
+
+### plot blank curves to look for drift
+
+## create a dataframe with milliQ blanks only
+```{r, include= FLASE}
+{library(dplyr)
+CDOM_blanks <- filter(CDOM_data, Sample %in% blanks_list)
+
+## sample as factor
+head(CDOM_blanks)
+sapply(CDOM_blanks, class)
+temp2 <- as.factor(CDOM_blanks$Sample)
+CDOM_blanks$Sample <- temp2
+rm(temp2)
+sapply(CDOM_blanks, class)
+
+#order the data by analysis_time
+CDOM_blanks <- CDOM_blanks[order(CDOM_blanks$Analysis_time),]
+}
+```
+
+## plot the data in CDOM_blanks, organise by samples, to look for drift
+```{r, include= FLASE}
+{library(ggplot2)
+driftplot <- ggplot(CDOM_blanks, aes(x = Wavelength_nm, y = Absorbance, group = Analysis_time, colour = Sample)) + 
+  geom_line(size=0.1) +
+  ylab('Absorbance') +
+  xlab('Wavelength_nm') +
+  scale_y_continuous(minor_breaks = NULL, breaks=seq(-0.02,0.02,0.01),limits=c(-0.20,0.20)) +
+  scale_x_continuous(minor_breaks = NULL, breaks=seq(250,750,50), limits=c(250,750)) +
+  theme_gray() 
+driftplot
+}
+
+#save a copy of the driftplot as a .jpg
+{plotpath <- file.path(wd,"outputs","plots")
+batch <- levels(as.factor(CDOM_data$Batch))
+plotfilename <- paste(batch,"_driftplot_initial", ".jpg",sep = "")
+ggsave(plotfilename, path=plotpath)
+}
+```
+
+### the baseline (on the spec) for this batch of scans was applied too early while the instrument was still warming up. however the start and end blanks were still saved properly and were scanned after the instrument had stabilised so they reflect the working baseline that the batch was scanned against, so we can use the existing "start" blank to correct all the raw absorbace values to a meaningful baseline
+
+##the following lines are applying this correction to reset the "baseline" - for this chunk of code the working baseline is the 1st blank scan "milliq_01_start"
+
+```{r}
+library(tidyr)
+library(data.table)
+# create a copy of CDOM_data
+  CDOM_baseline <- CDOM_data
+  is.data.table(CDOM_baseline)
+  CDOM_baseline <- data.table(CDOM_baseline)
+  is.data.table(CDOM_baseline)
+
+# make the initial blank the 'baseline value" for all scans
+  names(CDOM_baseline)
+  baseline <- CDOM_baseline[Sample == "milliq_01_start", Absorbance, by=Wavelength_nm] # make milliq_01_start the baseline
+  setnames(baseline, "Absorbance", "Abs_baseline") #change the column name in baseline from "Absorbance" to "Abs_baseline"
+  CDOM_baseline <- CDOM_baseline[baseline, on="Wavelength_nm", allow.cartesian=TRUE]
+  baseline <- NULL
+  rm(baseline)
+  names(CDOM_baseline)
+  
+  print(CDOM_baseline[, Abs_corr := Absorbance-Abs_baseline]) # corrected raw absorbance values calculated based on the absorbance minus the actual baseline 
+#  CDOM_baseline2 <- CDOM_baseline[Wavelength_nm >=250] # just data between 250-750nm
+#  CDOM_baseline <- CDOM_baseline[order(Analysis_time)]
+  CDOM_baseline <- CDOM_baseline[order(Analysis_time)]
+  CDOM_baseline <- as.data.table(CDOM_baseline)  
+  CDOM_baseline$Absorbance <- CDOM_baseline$Abs_corr #make the baseline corrected data into the Absorbance data
+  CDOM_baseline$Abs_baseline <- NULL #remove the Abs_baseline data
+  CDOM_baseline$Abs_corr <- NULL #remove the Abs_corr data
+  CDOM_data <- CDOM_baseline #setup the working dataframe with the re-baselined data
+  CDOM_blanks <- filter(CDOM_data, Sample %in% blanks_list) #setup the blank dataframe with the re-baselined data
+  CDOM_baseline <- NULL
+  rm(CDOM_baseline)
+  
+# the working dataframes are now setup with the correct baseline and the script can now continue as per the normal process
+  
+```
+
+## plot the data in CDOM_blanks again, organise by samples, to look for drift
+```{r, include= FLASE}
+{library(ggplot2)
+driftplot <- ggplot(CDOM_blanks, aes(x = Wavelength_nm, y = Absorbance, group = Analysis_time, colour = Sample)) + 
+  geom_line(size=0.1) +
+  ylab('Absorbance') +
+  xlab('Wavelength_nm') +
+  scale_y_continuous(minor_breaks = NULL, breaks=seq(-0.02,0.02,0.01),limits=c(-0.02,0.02)) +
+  scale_x_continuous(minor_breaks = NULL, breaks=seq(250,750,50), limits=c(250,750)) +
+  theme_gray() 
+driftplot
+}
+
+#save a copy of the driftplot as a .jpg
+{plotpath <- file.path(wd,"outputs","plots")
+batch <- levels(as.factor(CDOM_data$Batch))
+plotfilename <- paste(batch,"_driftplot", ".jpg",sep = "")
+ggsave(plotfilename, path=plotpath)
+}
+```
+
+##calculate rate of drift @250nm...and compare to sample values.
+```{r, include= FLASE}
+blanks_250 <- filter(CDOM_blanks, Wavelength_nm == 250.0)
+blanks_250 <- group_by(blanks_250, Sample)
+library(data.table)
+setDT(blanks_250)
+blanks_250[, tdiff_hrs := difftime(Analysis_time, shift(Analysis_time, fill=Analysis_time[1L]), units="hours")]
+blanks_250$tdiff_hrs <- as.numeric(blanks_250$tdiff_hr, units="hours")
+blanks_250$tdiff_hrs <- cumsum(blanks_250$tdiff)
+blanks_250$Absorbance <- as.numeric(as.character(blanks_250$Absorbance))
+baseline <- blanks_250[1, 2]
+blanks_250$baseline <- baseline
+blanks_250$absdelta <- blanks_250$Absorbance - blanks_250$baseline
+blanks_250$baseline <- NULL
+baseline <- NULL
+blanks_250$drift_abs.hr <- blanks_250$absdelta/blanks_250$tdiff_hrs
+#what proportion of sample values is the change in absorbance of blanks
+samples_250 <- filter(CDOM_data, Wavelength_nm == 250.0 & Sample %in% samples_list)
+mean_250 <- mean(samples_250$Absorbance)
+blanks_250$samplemean <- mean_250
+blanks_250$proportion <- blanks_250$absdelta/blanks_250$samplemean
+rm(mean_250)
+#print blanks_250
+blankspath <- file.path(wd,"outputs","data")
+datasaveblanks250 <- paste("outputs/data/",(gsub(pwd,"",wd)),"_blanks_250",".csv", sep="")
+write.csv(blanks_250,file=datasaveblanks250,row.names=F)
+```
+
+# Correct for drift as determined from blanks collected throughout the analysis run (start, end and every 10 samples)
+# set up a correction matrix based on the blanks data
+# first create a df from all the data blanks and samples for the analysis time (not abs values)
+```{r, include= FLASE}
+{names(CDOM_data)
+library(tidyr)
+library(data.table)
+# create a data table showing the time lapsed between scanning the 1st blank and the subsequent samples/blanks
+  dat_order <- CDOM_data
+  dat_order$Absorbance <- NULL
+  dat_order <- subset(dat_order, Wavelength_nm == 250)
+  dat_order$Wavelength_nm <- NULL
+  dat_order$Batch <- NULL
+  dat_order <- dat_order[order(dat_order$Analysis_time),]
+  names(dat_order)
+  dat_order <- group_by(dat_order, Sample)
+  setDT(dat_order)
+  dat_order[, tdiff_hrs := difftime(Analysis_time, shift(Analysis_time, fill=Analysis_time[1L]), units="hours")]
+  dat_order$tdiff_hrs <- as.numeric(dat_order$tdiff_hrs, units="hours")
+  dat_order$tdiff_hrs <- cumsum(dat_order$tdiff_hrs)
+  names(dat_order)
+  print(dat_order[, time_blanks := tdiff_hrs]) 
+  dat_order$time_blanks[dat_order$Sample %in% samples_list] <- NA
+  names(dat_order)
+# create a copy of CDOM_data
+  CDOM_corr <- CDOM_data
+  is.data.table(CDOM_corr)
+  CDOM_corr <- data.table(CDOM_corr)
+  is.data.table(CDOM_corr)
+# copy Absorbance values to a new column called Abs_blanks - then keep only the absorbance data for blanks in this column
+  print(CDOM_corr[, Abs_blanks := Absorbance]) 
+  CDOM_corr$Abs_blanks[CDOM_corr$Sample %in% samples_list] <- NA
+# merge dat_order and CDOM_corr to a single data table
+  correctiondat <- merge(dat_order, CDOM_corr, allow.cartesian=TRUE, all.x = TRUE, all.y = TRUE)
+  correctiondat <- correctiondat[order(correctiondat$Analysis_time),]
+  is.data.table(correctiondat)
+  CDOM_corr <- NULL
+  rm(CDOM_corr)
+# calculate raw absorbance values with correction for drift
+  names(correctiondat)
+  baseline <- correctiondat[Sample == "milliq_01_start", Absorbance, by=Wavelength_nm] # make milliq_01_start the baseline
+  setnames(baseline, "Absorbance", "Abs_baseline") #change the column name in baseline from "Absorbance" to "Abs_baseline"
+  correctiondat <- correctiondat[baseline, on="Wavelength_nm", allow.cartesian=TRUE]
+  baseline <- NULL
+  rm(baseline)
+  names(correctiondat)
+  library(zoo)
+  correctiondat$Abs_blanks_p <- na.locf(correctiondat$Abs_blanks, fromLast = FALSE) # this is a temp column holding the prev blank abs value (i.e. from the start of each lot of 10 samples), used in calculating the amount of drift to apply to each scan
+  correctiondat$Abs_blanks_n <- na.locf(correctiondat$Abs_blanks, fromLast = TRUE) # this is a temp column holding the next blank abs values (i.e. from the end of each lot of 10 samples), used in calculating the amount of drift to apply to each scan
+  print(correctiondat[, Abs_delta := Abs_blanks_p-Abs_blanks_n]) # shows the difference between the prev blank and the next blank
+  #correctiondat$run_time <- dat_order[.N,3] # column holding the length of time taken to complete the full run of samples in the batch
+  correctiondat$blank_time_p <- na.locf(correctiondat$time_blanks, fromLast = FALSE) #elapsed time when the prev blank scan was taken
+  correctiondat$blank_time_n <- na.locf(correctiondat$time_blanks, fromLast = TRUE) #elapsed time when the next blank scan was taken
+  print(correctiondat[, drift := Abs_delta/(blank_time_n-blank_time_p)*(tdiff_hrs-blank_time_p)]) # shows the drift between the prev and next blank based on time elapsed since prev blank as a proportion of time elapsed to the next blank
+  correctiondat$drift[is.na(correctiondat$drift)] <- 0 # replace the NAN with 0
+  print(correctiondat[, drift_base := Abs_blanks_p-Abs_baseline]) # shows the drift between the baseline and the relevent 'prev blank'
+  print(correctiondat[, Abs_corr := Absorbance+drift-drift_base]) # corrected raw absorbance values calculated based on the absorbance minus the drift between prev and next blanks minus drift between prev blank and the baseline 
+  correctiondat2 <- correctiondat[Wavelength_nm >=250] # just data between 250-750nm
+  correctiondat <- correctiondat[order(Analysis_time)]
+  correctiondat2 <- correctiondat2[order(Analysis_time)]
+  correctiondat2 <- as.data.table(correctiondat2)
+  }
+```
+
+## create a dataframe with corrected milliQ blanks only
+```{r, include= FLASE}
+{library(dplyr)
+    CDOM_blanks_corr <- filter(correctiondat, Sample %in% blanks_list)
+    
+    ## sample as factor
+    head(CDOM_blanks_corr)
+    sapply(CDOM_blanks_corr, class)
+    temp2 <- as.factor(CDOM_blanks_corr$Sample)
+    CDOM_blanks_corr$Sample <- temp2
+    rm(temp2)
+    sapply(CDOM_blanks_corr, class)
+  }
+```
+
+## plot the data in CDOM_blanks_corr, organise by samples to see the drift correction
+```{r, include= FLASE}
+{library(ggplot2)
+  driftplot_corr <- ggplot(CDOM_blanks_corr, aes(x = Wavelength_nm, y = Abs_corr, group = Analysis_time, colour = Sample)) + 
+    geom_line(size=0.1) +
+    ylab('Absorbance') +
+    xlab('Wavelength_nm') +
+    scale_y_continuous(minor_breaks = NULL, breaks=seq(-0.02,0.02,0.01),limits=c(-0.02,0.02)) +
+    scale_x_continuous(minor_breaks = NULL, breaks=seq(250,750,50), limits=c(250,750)) +
+    theme_gray() 
+  driftplot_corr
+}
+
+#save a copy of the driftplot as a .jpg
+
+  {plotpath <- file.path(wd,"outputs","plots")
+    batch <- levels(as.factor(CDOM_data$Batch))
+    plotfilename <- paste(batch,"_driftplot_corr", ".jpg",sep = "")
+    ggsave(plotfilename, path=plotpath)
+  } 
+  
+```
+
+## create matrices (i.e. convert to 'wide' format)
+```{r, include= FLASE}
+{library(tidyr)
+dat <- CDOM_data
+dat$Analysis_time <- NULL
+CDOM_matrix <- spread(dat, key = Sample, value = Absorbance)
+dat <- NULL
+rm(dat)}
+
+## write matrix data table to file
+datasave <- paste("outputs/data/",(gsub(pwd,"",wd)),"_raw",".csv", sep="")
+write.csv(CDOM_matrix,file=datasave,row.names=F)
+
+
+{correctiondat_wide <- correctiondat
+names(correctiondat_wide)
+correctiondat_wide$Analysis_time <- NULL
+correctiondat_wide$tdiff_hrs <- NULL
+correctiondat_wide$time_blanks <- NULL
+correctiondat_wide$Absorbance <- NULL
+correctiondat_wide$Abs_blanks <- NULL
+correctiondat_wide$Abs_baseline <- NULL
+correctiondat_wide$Abs_blanks_p <- NULL
+correctiondat_wide$Abs_blanks_n <- NULL
+correctiondat_wide$Abs_delta <- NULL
+correctiondat_wide$blank_time_p <- NULL
+correctiondat_wide$blank_time_n <- NULL
+correctiondat_wide$drift <- NULL
+correctiondat_wide$drift_base <- NULL
+names(correctiondat_wide)
+correctiondat_wide <- spread(correctiondat_wide, key = Sample, value = Abs_corr)
+## write matrix data table to file
+datasave <- paste("outputs/data/",(gsub(pwd,"",wd)),"_raw_drift_corr",".csv", sep="")
+write.csv(correctiondat_wide,file=datasave,row.names=F)
+} 
+```
+  
+# re-write of code for calculating absorption coefficient etc (above) but using drift corrected data...
+# CDOM data conversions - code from "CALCULATIONS" script by Christian Lomborg, adapted by Daniel Moran to batches of CDOM scans from Shimadzu UV-1900 UV-Vis spec...
+## Outputs (for each sample):
+## CDOM data conversion using "internal correction approach" to give absorbtion coefficient at each wavelength (Acdom). (see Lønborg & Álvarez-Salgado / Deep-Sea Research 85 (2014) 35-46)
+## Factor 23.03 in calculating Acdom converts from decadic to natural logarithms and considers the cell path-length (10cm) (see Lønborg & Álvarez-Salgado / Deep-Sea Research 85 (2014) 3546)
+## Note. if a different cell path legth is used (anything other than 10cm) than the factor will need to be adjusted. factor=2.303/path length in meters
+## spectral slope (S). see C. A. Stedmon and S. Markager / Limnol. Oceanogr., 46(8), 2001, 2087-2093
+## plots of fit between observed and modelled data (based on S) 
+  
+```{r, include= FLASE} 
+
+rsq <- function(x, y) summary(lm(y~x))$r.squared
+
+  for (f in samples_list) {
+    if (!exists("CDOM_conv")){
+      CDOM_conv <- c()
+      CDOM_conv2 <- c()
+      CDOM_conv3 <- c()
+    }
+    if (exists("CDOM_conv")){ 
+      dat <- correctiondat2[Sample == f, Abs_corr, by=Wavelength_nm]
+      dat$Sample = factor(f)
+      dat2 <- c()
+      dat2$Sample = factor(f)
+      MeanAbs600_750 <- mean(subset(dat, Wavelength_nm >=600 & Wavelength_nm <=750)$Abs_corr, na.rm=TRUE)
+      dat2$MeanAbs600_750_raw <- MeanAbs600_750
+      dat$Acdom = 23.03 * (dat$Abs_corr - MeanAbs600_750)
+      
+      Abs350 = dat$Acdom[dat$Wavelength_nm==350]
+      dat2$Abs350 = Abs350
+      deltaLambda = dat$Wavelength_nm - dat$Wavelength_nm[dat$Wavelength_nm==350]
+      dat$deltaLambda <- deltaLambda
+      Abs443 = dat$Acdom[dat$Wavelength_nm==443]
+      dat2$Abs443 = Abs443
+      
+      dat.nls <- nls(Acdom ~ Abs350*exp(-S*deltaLambda),
+                     data=dat, start=list(S=1), control=nls.control(maxiter=1000))
+      summary(dat.nls)
+      dat2$S<-coef(dat.nls)
+
+      xs <- seq(350,680,by=0.5) - dat$Wavelength_nm[dat$Wavelength_nm==350]
+      newdata <- data.frame(deltaLambda=xs)
+      fit <- predict(dat.nls, newdata=newdata)
+      newdata <- cbind(newdata, fit)
+      newdata$Sample = factor(f)
+      newdata$wavelength_nm <- newdata$deltaLambda + 350
+      
+      GoF_temp <- newdata
+      data1 <- filter(dat, Wavelength_nm >= 350.0 & Wavelength_nm <= 680.0)
+      GoF_temp$Acdom = data1$Acdom
+      r_squared <- rsq(GoF_temp$Acdom, GoF_temp$fit)
+      
+      plotpath <- file.path(wd,"outputs","plots")
+      plotfilename <- paste(dat2$Sample,"_drift_corr",".jpg",sep = "")
+      print(ggplot(dat, aes(y=Acdom, x=Wavelength_nm)) + geom_line()+
+              geom_line(data=newdata, aes(y=fit, x=wavelength_nm), color='red')+ggtitle(paste(dat2$Sample,': S=',dat2$S, ', ', 'R^2=', r_squared))+
+              scale_y_continuous(expression(A[cdom]))+
+              scale_x_continuous(expression(Wavelength (nm))))
+      ggsave(plotfilename, path=plotpath)
+      
+      CDOM_conv <- rbind(CDOM_conv, dat) 
+      dat2 <- as.data.frame(dat2,row.names=seq())
+      CDOM_conv2 <- rbind(CDOM_conv2, dat2) 
+      CDOM_conv3 <- rbind(CDOM_conv3, newdata) 
+      rm(dat)
+      rm(dat2)
+      rm(newdata)
+      rm(dat.nls)
+      rm(fit)
+      rm(xs)
+      rm(MeanAbs600_750)
+      rm(Abs350)
+      rm(deltaLambda)
+      rm(Abs443)
+      rm(GoF_temp)
+      rm(r_squared)
+      rm(data1)
+    }
+  }
+  
+```  
+
+
+## create an object containing the new directory and name of compiled data to be saved
+```{r, include= FLASE}
+  {
+    datasave2 <- paste("outputs/data/",(gsub(pwd,"",wd)),"_factors_drift_corr",".csv", sep="")
+    datasave4 <- paste("outputs/data/",(gsub(pwd,"",wd)),"_Acdom_drift_corr",".csv", sep="")
+    
+    ## write data table to file
+    write.csv(CDOM_conv2,file=datasave2, row.names=F)
+    
+    ## remove the deltaLambda and Abs. column from the compiled data
+    CDOM_conv4 <- CDOM_conv
+    CDOM_conv4$deltaLambda <- NULL
+    CDOM_conv4$Abs_corr <- NULL
+    
+    ## create a matrix for CDOM_conv data (i.e. convert to 'wide' format)
+    library(tidyr)
+    #to be looked at below (why have to be mean?)
+    ACDOM_matrix <- pivot_wider(CDOM_conv4, names_from = Sample, values_from = Acdom, values_fn = mean)
+   
+    ## write matrix data to file
+    write.csv(ACDOM_matrix,file=datasave4, row.names=F) 
+  }
+```  
+
+
+##calculate Rsquared for GoF (loop)
+```{r, include= FLASE}
+dat_GoF <- CDOM_conv3
+dat_GoF$deltaLambda <- NULL
+temp <- filter(CDOM_conv4, Wavelength_nm >= 350.0 & Wavelength_nm <= 680.0)
+dat_GoF$Acdom <- temp$Acdom
+dat_GoF <- dat_GoF[c("Sample", "wavelength_nm", "Acdom", "fit")]
+temp <- NULL
+rsq <- function(x, y) summary(lm(y~x))$r.squared
+
+for (z in samples_list) {
+    if (!exists("GoF_temp")){
+      GoF_temp <- c()
+      datR2 <- data.frame()
+      }
+    if (exists("GoF_temp")){ 
+    dat <- c()
+    GoF_temp <- filter(dat_GoF, Sample==z)
+    dat$Sample = factor(z)
+    r_squared <- rsq(GoF_temp$Acdom, GoF_temp$fit)
+    dat$r_squared <- r_squared
+    datR2 <- rbind(datR2, dat)
+    }
+}
+
+#rm(dat)
+#rm(GoF_temp)
+#rm(r_squared)
+
+#print datR2
+#datasaveR2 <- paste("outputs/data/",(gsub(pwd,"",wd)),"_GoF",".csv", sep="")
+#write.csv(datR2,file=datasaveR2,row.names=F)
+```
+
+##calculate CDOM_443 from modeled data
+```{r, include= FLASE}
+CDOM_conv3$wavelength_nm <- CDOM_conv3$deltaLambda + 350
+{
+  model_443 <- filter(CDOM_conv3, wavelength_nm == 443.0)
+  model_443 <- group_by(model_443, Sample)
+  model_443$model_443 <- model_443$fit
+  model_443$wavelength_nm <- NULL
+  model_443$fit <- NULL
+  model_443$deltaLambda <- NULL
+  names(model_443)
+  is.data.table(model_443)
+  setnames(model_443, "Sample", "sample") #change the column name in baseline from "Sample" to "sample"
+  #print CDOM_443
+  model_443<- cbind(model_443, datR2$r_squared)
+  colnames(model_443)<- c("Sample", "model_443","r_squared")
+  datasavemodel443 <- paste("outputs/data/",(gsub(pwd,"",wd)),"_model443_drift_corr",".csv", sep="")
+  write.csv(model_443,file=datasavemodel443,row.names=F)
+}
+```
