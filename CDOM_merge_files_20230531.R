@@ -1,10 +1,13 @@
 ## 
-# CDOM data batches - collate the data, check for drift and apply corrections
+# before using this script you must have already run CDOM processing script on individual analytical batches of CDOM data auto-exported from the AIMS WQ Shimadzu UV-1900 UV-Vis spectrophotometer
+# input required to the current script are the entire complement of processed CDOM data batches for a water year, where each scan in each analytical batch has been cleaned, checked for drift and corrections applied
 ##
 
 # Daniel Moran
 # AIMS
-# last update 06/07/21 (Alex Macadam)
+# update 06/07/21 (Alex Macadam)
+# update 31/05/2023 ?
+# update 12/06/2025 import to github MMP-CDOM repo
 
 ###
 ### Combine model_443 and Rsquared outputs from each batch into a single dataframe and save as a .csv file
@@ -18,7 +21,7 @@ rm(list=ls())
 setwd("R:/Lagoon_WQ/results/CDOM/2021-22 report") # set your working directory
 wd <- getwd()
 
-# create list of all files in the wd with model443 and Rsquared data
+# create list of all files in the wd with model443 and Rsquared data fields
 file_list <- list.files(pattern="model443_drift_corr.csv", full.names=FALSE, recursive = TRUE) # recursive = TRUE allows list.files function to look in all subdirectories 
 ## import all the model443 .CSVs in the wd to a single dataframe
 ## create a "Filename" column containing the file name associated with each row 
