@@ -8,6 +8,7 @@
 # update 06/07/21 (Alex Macadam)
 # update 31/05/2023 ?
 # update 12/06/2025 import to github MMP-CDOM repo
+# update: 17/06/2025 moved this script to github repo MMP-CDOM/main and renamed to remove now redundant version control (no longer required with move to github).
 
 ###
 ### Combine model_443 and Rsquared outputs from each batch into a single dataframe and save as a .csv file
