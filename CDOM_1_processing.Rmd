@@ -15,34 +15,35 @@ update: 06/07/2021 combined modelled443 and R2 into the model443 outputs csv. mo
 update: 10/02/2023 added additional details to the upfront instructions.
 update: 10/05/2023 changed the theme for the blank driftplots from "theme_minimal" to "theme_gray" due to problems we were having black plot backgrounds being output on some user laptops - not sure what the issue was but perhaps related to user settings somehow - "theme_gray" seems to have solved the problem.
 update: 04/03/2025 arbitrary version update before start  of 2024-25 conversions
-update: 17/06/2025 moved this script to github repo MMP-CDOM/main and renamed to remove now redundant version control (no longer required with move to github)
+update: 17/06/2025 moved this script to github repo MMP-CDOM/main and renamed to remove now redundant version control (no longer required with move to github). Confirmed this script compatible with R version 4.3.1 (2023-06-16 ucrt) -- "Beagle Scouts" and RStudio 2025.05.1+513 "Mariposa Orchid" Release (ab7c1bc795c7dcff8f26215b832a3649a19fc16c, 2025-06-01) for windows.
 
-User to use R version 4.0.5 and Rstudio version 1.4.1106
-Combine multiple .csv files from a batch of UV-Vis spec outputs into a single data table
+This script is confirmed to be compatible with R version 4.3.1 and Rstudio version 2025.05.1+513
+Combine multiple .csv files from a batch of UV-Vis spec outputs into a single data table and convert to absorption coefficients
 Run this script first
 User must: 
 : IN WINDOWS EXPLORER
-: -copy script to the working directory and add batch information to the script filename eg. "CDOM processing_WQQ_v20210517_b20200928.Rmd"
+: -pull latest version of the code from github repo MMP-CDOM/main. See Daniel Moran for help with this if you need assistance accessing the repo
+: -copy script to the working directory and add batch information to the script filename eg. "CDOM_1_processing_b20241218_FTZ400-412.Rmd"
 : -create "extra" folder in the working directory and move run notes, a backup of the raw data and any additional files to this folder.
 : IN the R SCRIPT FOR THIS BATCH
+: -reset R session (windows CTRL+SHIFT+F10)
 : -change the wd
-: -change the file string information in "pwd" used for generating filenames - i.e. "C:\Users\dmoran\OneDrive -Australian Institute of Marine Science\WFH\CDOM data\2019-20 report\" in this script
-generally only will need to be done for each years' processing if you are not moving the data.
+: -change the file string information in "pwd" used for generating filenames to reflect the actual parent folder for the wd. (update to pwd generally only will need to be done for each years' processing if you are not moving the data.)
 N.B.
 data files should only include files that have been auto-exported from the Shimadzu UV-1900 UV-Vis spec.
 R for windows does not like '\' so you will need to replace all the '\' in the filepath with '/'
 
 copy file path here:
-R:\Lagoon_WQ\results\CDOM\2023-24 report\WQQ\CDOM-20240625_WQQ955-984
+R:\Lagoon_WQ\results\CDOM\2024-25 report\FTZ\CDOM-20250616_FTZ435-440
 ---
 
 ## Set the working directory
 ###MUST change '\' to '/' in path
 ```{r, include=FALSE}
 rm(list=ls())
-setwd("R:/Lagoon_WQ/results/CDOM/2023-24 report/WQQ/CDOM-20240625_WQQ955-984")
+setwd("R:/Lagoon_WQ/results/CDOM/2024-25 report/FTZ/CDOM-20250616_FTZ435-440")
 wd <- getwd()
-pwd<- "R:/Lagoon_WQ/results/CDOM/2023-24 report/WQQ"
+pwd<- "R:/Lagoon_WQ/results/CDOM/2024-25 report/FTZ"
 ```
 
 
