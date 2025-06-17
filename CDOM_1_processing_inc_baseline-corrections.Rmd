@@ -13,8 +13,8 @@ update: 17/05/2021 removed unused code and added R2 values to graph headers
 update: 18/05/2021 added clear environment in line 33
 update: 06/07/2021 combined modelled443 and R2 into the model443 outputs csv. moved this file to outputs/data.
 update: 10/02/2023 added additional details to the upfront instructions.
-
 update: 10/05/2023 This script includes an extra chunck of code to reset the baseline for all the scans in this batch - the actual baseline was taken before the instrument had stabilised so the actual blanks and scans had drifted from the zero baseline - fortunalty the actual blanks and samples were scanned after the instrument had stabilised and the output data could be ~corrected to a zero baseline - using the initial blank as the baseline offset. Also see comments and records in the batch folder for further details
+update: 17/06/2025 moved this script to github repo MMP-CDOM/baseline_corrections and renamed to remove now redundant version control (no longer required with move to github)
 
 User to use R version 4.0.5 and Rstudio version 1.4.1106
 Combine multiple .csv files from a batch of UV-Vis spec outputs into a single data table
