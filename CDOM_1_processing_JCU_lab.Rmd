@@ -34,16 +34,16 @@ data files should only include files that have been auto-exported from the Shima
 R for windows does not like '\' so you will need to replace all the '\' in the filepath with '/'
 
 copy file path here:
-R:\Lagoon_WQ\results\CDOM\2024-25 report\FTZ\CDOM-20250616_FTZ435-440
+R:\Lagoon_WQ\results\CDOM\2024-25 report\JCF\CDOM-JCU_J25-0046
 ---
 
 ## Set the working directory
 ###MUST change '\' to '/' in path
 ```{r, include=FALSE}
 rm(list=ls())
-setwd("R:/Lagoon_WQ/results/CDOM/2024-25 report/FTZ/CDOM-20250616_FTZ435-440")
+setwd("R:/Lagoon_WQ/results/CDOM/2024-25 report/JCF/CDOM-JCU_J25-0046")
 wd <- getwd()
-pwd<- "R:/Lagoon_WQ/results/CDOM/2024-25 report/FTZ"
+pwd<- "R:/Lagoon_WQ/results/CDOM/2024-25 report/JCF"
 ```
 
 
@@ -58,126 +58,64 @@ dir.create(file.path(wd,"outputs","data"))
 ## create lists of all files in the wd
 ```{r, include= FALSE}
 library(rlist)
-{file_list <- list.files(wd, pattern=".csv", full.names=FALSE)
-# list blanks 
-file_list3 <- file_list[grep("illi",file_list)]
-# list files that are real samples, not milliq blanks
-file_list2 <- setdiff(file_list, file_list3)}
-```
-
-## list sample names (i.e. without .csv or other suffix)
-```{r, include=FALSE}
-{samples_list <- gsub("_RawData.csv","",file_list2)
-# list blanks sample names
-blanks_list <- gsub("_RawData.csv","",file_list3)
-rm(file_list2)
-rm(file_list3)
+{file_list <- list.files(wd, pattern=".csv", full.names=TRUE)
 }
 ```
 
-## Import all the CSVs in the wd to a single dataframe - also could consider the read_bulk function from the 'readbulk' package
-## Create a "Filename" column containing the file name associated with each row
+
+## Import the data from CSV. 
 ```{r, include= FLASE}
-library(plyr)
+library(tidyverse)
 
-# create a dataframe for the merged data
-CDOM_comp<-data.frame()
+CDOM_comp <- read.csv(file_list, header =  TRUE)
+names(CDOM_comp)
+CDOM_comp <- dplyr::rename(CDOM_comp, 'Wavelength_nm' = 'Wavelength.nm.')
+CDOM_comp <- dplyr::rename(CDOM_comp, 'MilliQ_start' = 'Milli.Q')
+CDOM_comp <- dplyr::rename(CDOM_comp, 'MilliQ_end' = 'Milli.Q.1')
+names(CDOM_comp)
 
-# now append all the data from the different csv files to this dataframe
-for (x in file_list){
-  if (exists("CDOM_comp")){
-    temp_dataset <-ldply(x, read.csv, header=FALSE, skip=39, sep=',',col.names=c('Wavelength_nm','Absorbance'))
-    temp_dataset$Filename = factor(x)
-    CDOM_comp <- rbind(CDOM_comp, temp_dataset)
-    rm(temp_dataset)
-  }
-  
-}
 ```
 
-## create a second data frame that shows the date/time stamp for analysis of each sample
-```{r, include= FLASE}
-for (x in list.files(pattern="*.csv")){
-  # create a dataframe for the merged data
-  if (!exists("Analysis_times")){
-    Analysis_times<-c()
-  }
-  
-  # now append all the data from the different csv files to this dataframe
-  if (exists("Analysis_times")){
-    temp_dataset <-ldply(x, read.csv, header=FALSE, skip=8, nrows=1, sep=',',col.names=c('title','Analysis_time','Filename'))
-    temp_dataset$title <- NULL
-    temp_dataset$Filename = factor(x)
-    Analysis_times <- rbind(Analysis_times, temp_dataset)
-    rm(temp_dataset)
-  }
-  
-}
-```
-
-## merge the dataframes by Filename
-```{r, include= FLASE}
-{CDOM_data <- merge(CDOM_comp, Analysis_times, by=c("Filename"), all=TRUE)
-CDOM_comp <- NULL
-rm(CDOM_comp)
-Analysis_times <- NULL
-rm(Analysis_times)
-
-## write a list of sample names based on the file names but without the "_RawData.csv" suffix
-Sample <- gsub("_RawData.csv","",CDOM_data$Filename)
-
-## substitute "Filename" with "Sample" 
-CDOM_data$Sample <- Sample
-CDOM_data$Filename <- NULL
-rm(Sample)
-## Create a "batch" column containing the processing date for this batch of samples
-Batch_info <- read.csv(x)
-Batch_dt <- Batch_info[8,]
-Batch_date <- as.Date(Batch_dt, format = "%d/%m/%Y")
-CDOM_data$Batch <- Batch_date
-Batch_info <- NULL
-rm(Batch_info)
-rm(Batch_dt)
-rm(Batch_date)
-## order by Analysis_time
-#what are the data formats for each column?
-sapply(CDOM_data, class)
-#convert analysis_time from factor to POSIXct time format
-temp <- as.POSIXct(CDOM_data$Analysis_time, format = "%d/%m/%Y %I:%M:%S %p") #note $I is for 12hr time, %H is for 24 hr time
-CDOM_data$Analysis_time <- NULL
-CDOM_data$Analysis_time <- temp
-rm(temp)
-sapply(CDOM_data, class)
-#order by analysis_time
-CDOM_data <- CDOM_data[order(CDOM_data$Analysis_time),]
-}
-```
-
-### plot blank curves to look for drift
+### plot blank curves to look for drift - we are only plotting this to eyeball and ensure we are happy with the JCU output at a gross level - they only have start and end blank scans 
 
 ## create a dataframe with milliQ blanks only
 ```{r, include= FLASE}
-{library(dplyr)
-CDOM_blanks <- filter(CDOM_data, Sample %in% blanks_list)
 
-## sample as factor
-head(CDOM_blanks)
+list <- names(CDOM_comp)  
+blank_list <- list[grep("illi",list)]
+samples_list <- setdiff(list, blank_list)
+  
+CDOM_long <- pivot_longer(CDOM_comp, cols = MilliQ_start:MilliQ_end, names_to = 'Sample', values_to = 'Absorbance', cols_vary = "fastest")
+
+
+#filter to show  half-nanometer increments only
+filter_vals <- seq(250, 750, by=0.5)
+names(CDOM_long)
+CDOM_long <- filter(CDOM_long, Wavelength_nm %in% filter_vals)
+rm(filter_vals)
+
+#create df of the blanks 
+CDOM_blanks <- filter(CDOM_long, Sample %in% blank_list)
+
+## sample as factor, order the data by start to end of the batch
+CDOM_blanks
 sapply(CDOM_blanks, class)
-temp2 <- as.factor(CDOM_blanks$Sample)
+Samplelvls <- c("MilliQ_start", "MilliQ_end")  
+temp2 <- factor(CDOM_blanks$Sample, levels = Samplelvls)
 CDOM_blanks$Sample <- temp2
 rm(temp2)
 sapply(CDOM_blanks, class)
+levels(CDOM_blanks$Sample)
 
-#order the data by analysis_time
-CDOM_blanks <- CDOM_blanks[order(CDOM_blanks$Analysis_time),]
-}
+
+
 ```
 
 ## plot the data in CDOM_blanks, organise by samples, to look for drift
 ```{r, include= FLASE}
 {library(ggplot2)
-driftplot <- ggplot(CDOM_blanks, aes(x = Wavelength_nm, y = Absorbance, group = Analysis_time, colour = Sample)) + 
-  geom_line(size=0.1) +
+driftplot <- ggplot(CDOM_blanks, aes(x = Wavelength_nm, y = Absorbance, colour = Sample)) + 
+  geom_line(linewidth=0.1) +
   ylab('Absorbance') +
   xlab('Wavelength_nm') +
   scale_y_continuous(minor_breaks = NULL, breaks=seq(-0.02,0.02,0.01),limits=c(-0.02,0.02)) +
@@ -188,11 +126,33 @@ driftplot
 
 #save a copy of the driftplot as a .jpg
 {plotpath <- file.path(wd,"outputs","plots")
-batch <- levels(as.factor(CDOM_data$Batch))
+batch <- str_remove(wd, pwd)
+batch <- str_remove(batch, "/")
 plotfilename <- paste(batch,"_driftplot", ".jpg",sep = "")
 ggsave(plotfilename, path=plotpath)
 }
 ```
+#convert back to wide format and save a copy of the scans
+
+#run the conversion to ACDOM
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 ##calculate rate of drift @250nm...and compare to sample values.
