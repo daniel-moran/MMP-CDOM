@@ -82,8 +82,11 @@ names(CDOM_comp)
 ```{r, include= FLASE}
 
 list <- names(CDOM_comp)  
+batch <- str_remove(wd, pwd)
+batch <- str_remove(batch, "/")
 blank_list <- list[grep("illi",list)]
 samples_list <- setdiff(list, blank_list)
+samples_list <- setdiff(samples_list, Wavelength_nm)
   
 CDOM_long <- pivot_longer(CDOM_comp, cols = MilliQ_start:MilliQ_end, names_to = 'Sample', values_to = 'Absorbance', cols_vary = "fastest")
 
@@ -100,7 +103,6 @@ CDOM_blanks <- filter(CDOM_long, Sample %in% blank_list)
 ## sample as factor, order the data by start to end of the batch
 CDOM_blanks
 sapply(CDOM_blanks, class)
-#Samplelvls <- c("MilliQ_start", "MilliQ_end")  #can i replace this with the list that already exists in Blanks_list
 temp2 <- factor(CDOM_blanks$Sample, levels = blank_list)
 CDOM_blanks$Sample <- temp2
 rm(temp2)
@@ -187,13 +189,13 @@ rsq <- function(x, y) summary(lm(y~x))$r.squared
       CDOM_conv3 <- c()
     }
     if (exists("CDOM_conv")){ 
-      dat <- correctiondat2[Sample == f, Abs_corr, by=Wavelength_nm]
+      dat <- CDOM_long[Sample == f, Absorbance, by=Wavelength_nm]
       dat$Sample = factor(f)
       dat2 <- c()
       dat2$Sample = factor(f)
-      MeanAbs600_750 <- mean(subset(dat, Wavelength_nm >=600 & Wavelength_nm <=750)$Abs_corr, na.rm=TRUE)
+      MeanAbs600_750 <- mean(subset(dat, Wavelength_nm >=600 & Wavelength_nm <=750)$Absorbance, na.rm=TRUE)
       dat2$MeanAbs600_750_raw <- MeanAbs600_750
-      dat$Acdom = 23.03 * (dat$Abs_corr - MeanAbs600_750)
+      dat$Acdom = 23.03 * (dat$Absorbance - MeanAbs600_750)
       
       Abs350 = dat$Acdom[dat$Wavelength_nm==350]
       dat2$Abs350 = Abs350
@@ -220,7 +222,7 @@ rsq <- function(x, y) summary(lm(y~x))$r.squared
       r_squared <- rsq(GoF_temp$Acdom, GoF_temp$fit)
       
       plotpath <- file.path(wd,"outputs","plots")
-      plotfilename <- paste(dat2$Sample,"_drift_corr",".jpg",sep = "")
+      plotfilename <- paste(dat2$Sample,".jpg",sep = "")
       print(ggplot(dat, aes(y=Acdom, x=Wavelength_nm)) + geom_line()+
               geom_line(data=newdata, aes(y=fit, x=wavelength_nm), color='red')+ggtitle(paste(dat2$Sample,': S=',dat2$S, ', ', 'R^2=', r_squared))+
               scale_y_continuous(expression(A[cdom]))+
@@ -253,8 +255,8 @@ rsq <- function(x, y) summary(lm(y~x))$r.squared
 ## create an object containing the new directory and name of compiled data to be saved
 ```{r, include= FLASE}
   {
-    datasave2 <- paste("outputs/data/",(gsub(pwd,"",wd)),"_factors_drift_corr",".csv", sep="")
-    datasave4 <- paste("outputs/data/",(gsub(pwd,"",wd)),"_Acdom_drift_corr",".csv", sep="")
+    datasave2 <- paste("outputs/data/",(gsub(pwd,"",wd)),"_factors",".csv", sep="")
+    datasave4 <- paste("outputs/data/",(gsub(pwd,"",wd)),"_Acdom",".csv", sep="")
     
     ## write data table to file
     write.csv(CDOM_conv2,file=datasave2, row.names=F)
@@ -325,7 +327,7 @@ CDOM_conv3$wavelength_nm <- CDOM_conv3$deltaLambda + 350
   #print CDOM_443
   model_443<- cbind(model_443, datR2$r_squared)
   colnames(model_443)<- c("Sample", "model_443","r_squared")
-  datasavemodel443 <- paste("outputs/data/",(gsub(pwd,"",wd)),"_model443_drift_corr",".csv", sep="")
+  datasavemodel443 <- paste("outputs/data/",(gsub(pwd,"",wd)),"_model443",".csv", sep="")
   write.csv(model_443,file=datasavemodel443,row.names=F)
 }
 ```
