@@ -84,30 +84,37 @@ names(CDOM_comp)
 list <- names(CDOM_comp)  
 batch <- str_remove(wd, pwd)
 batch <- str_remove(batch, "/")
+scan_list <- setdiff(list, "Wavelength_nm")
 blank_list <- list[grep("illi",list)]
 samples_list <- setdiff(list, blank_list)
-samples_list <- setdiff(samples_list, Wavelength_nm)
+samples_list <- setdiff(samples_list, "Wavelength_nm")
   
 CDOM_long <- pivot_longer(CDOM_comp, cols = MilliQ_start:MilliQ_end, names_to = 'Sample', values_to = 'Absorbance', cols_vary = "fastest")
-
+sapply(CDOM_long, class)
+temp2 <- factor(CDOM_long$Sample, levels = scan_list)
+CDOM_long$Sample <- temp2
+rm(temp2)
+sapply(CDOM_long, class)
+levels(CDOM_long$Sample)
 
 #filter to show  half-nanometer increments only
 filter_vals <- seq(250, 750, by=0.5)
 names(CDOM_long)
 CDOM_long <- filter(CDOM_long, Wavelength_nm %in% filter_vals)
 rm(filter_vals)
+#CDOM_long$Batch <- batch
 
 #create df of the blanks 
 CDOM_blanks <- filter(CDOM_long, Sample %in% blank_list)
 
 ## sample as factor, order the data by start to end of the batch
-CDOM_blanks
-sapply(CDOM_blanks, class)
-temp2 <- factor(CDOM_blanks$Sample, levels = blank_list)
-CDOM_blanks$Sample <- temp2
-rm(temp2)
-sapply(CDOM_blanks, class)
-levels(CDOM_blanks$Sample)
+#CDOM_blanks
+#sapply(CDOM_blanks, class)
+#temp2 <- factor(CDOM_blanks$Sample, levels = blank_list)
+#CDOM_blanks$Sample <- temp2
+#rm(temp2)
+#sapply(CDOM_blanks, class)
+#levels(CDOM_blanks$Sample)
 
 
 
@@ -189,7 +196,9 @@ rsq <- function(x, y) summary(lm(y~x))$r.squared
       CDOM_conv3 <- c()
     }
     if (exists("CDOM_conv")){ 
-      dat <- CDOM_long[Sample == f, Absorbance, by=Wavelength_nm]
+      dat <- c()
+      dat <- filter(CDOM_long, Sample == f)
+      #dat <- CDOM_long[CDOM_long$Sample == f]#, Absorbance, by=Wavelength_nm]
       dat$Sample = factor(f)
       dat2 <- c()
       dat2$Sample = factor(f)
@@ -255,8 +264,8 @@ rsq <- function(x, y) summary(lm(y~x))$r.squared
 ## create an object containing the new directory and name of compiled data to be saved
 ```{r, include= FLASE}
   {
-    datasave2 <- paste("outputs/data/",(gsub(pwd,"",wd)),"_factors",".csv", sep="")
-    datasave4 <- paste("outputs/data/",(gsub(pwd,"",wd)),"_Acdom",".csv", sep="")
+    datasave2 <- paste(wd, "/outputs/data/", batch, "_factors",".csv", sep="")
+    datasave4 <- paste(wd, "/outputs/data/", batch, "_Acdom",".csv", sep="")
     
     ## write data table to file
     write.csv(CDOM_conv2,file=datasave2, row.names=F)
@@ -313,6 +322,7 @@ for (z in samples_list) {
 
 ##calculate CDOM_443 from modeled data
 ```{r, include= FLASE}
+library(data.table)
 CDOM_conv3$wavelength_nm <- CDOM_conv3$deltaLambda + 350
 {
   model_443 <- filter(CDOM_conv3, wavelength_nm == 443.0)
@@ -321,13 +331,14 @@ CDOM_conv3$wavelength_nm <- CDOM_conv3$deltaLambda + 350
   model_443$wavelength_nm <- NULL
   model_443$fit <- NULL
   model_443$deltaLambda <- NULL
+  names(datR2)
   names(model_443)
   is.data.table(model_443)
-  setnames(model_443, "Sample", "sample") #change the column name in baseline from "Sample" to "sample"
+  #setnames(model_443, "Sample", "sample") #change the column name in baseline from "Sample" to "sample"
   #print CDOM_443
   model_443<- cbind(model_443, datR2$r_squared)
   colnames(model_443)<- c("Sample", "model_443","r_squared")
-  datasavemodel443 <- paste("outputs/data/",(gsub(pwd,"",wd)),"_model443",".csv", sep="")
+  datasavemodel443 <- paste(wd, "/outputs/data/", batch, "_model443",".csv", sep="")
   write.csv(model_443,file=datasavemodel443,row.names=F)
 }
 ```
