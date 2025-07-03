@@ -67,12 +67,30 @@ library(rlist)
 ```{r, include= FLASE}
 library(tidyverse)
 
-CDOM_comp <- read.csv(file_list, header =  TRUE)
+CDOM_comp <- read.csv(file_list[1], header =  TRUE)
 names(CDOM_comp)
 CDOM_comp <- dplyr::rename(CDOM_comp, 'Wavelength_nm' = 'Wavelength.nm.')
 CDOM_comp <- dplyr::rename(CDOM_comp, 'MilliQ_start' = 'Milli.Q')
 CDOM_comp <- dplyr::rename(CDOM_comp, 'MilliQ_end' = 'Milli.Q.1')
 names(CDOM_comp)
+
+metaheaders <- read.csv(file_list[2], nrows = 2, header =  FALSE)
+metaheaders = sapply(metaheaders, paste, collapse = "")
+metadata <- read.csv(file_list[2], skip=3, col.names = metaheaders, header = FALSE)
+metadata <- rename(metadata, short_name = NANA)
+metadata <- rename(metadata, station_name_depth = Bottle.ID.for.Sample.Bottle)
+str_sub(metadata$station_name_depth, 7, 6) <- "_" 
+names(metadata)
+metadata <- metadata %>% mutate(Sample = paste(metadata$Reference, ".", metadata$SampleNo., sep = ""))
+names(metadata)
+metadata <- metadata %>% relocate(Sample, .after = SampleNo.)
+names(metadata)
+metadata <- metadata %>% select(c(Event..:short_name))
+names(metadata)
+metadata$Sample <- str_replace(metadata$Sample, c("-"), c("."))
+metadata <- distinct(metadata)
+metadata2 <- metadata %>% select(c(Sample, station_name_depth))
+
 
 ```
 
@@ -88,7 +106,7 @@ scan_list <- setdiff(list, "Wavelength_nm")
 blank_list <- list[grep("illi",list)]
 samples_list <- setdiff(list, blank_list)
 samples_list <- setdiff(samples_list, "Wavelength_nm")
-  
+
 CDOM_long <- pivot_longer(CDOM_comp, cols = MilliQ_start:MilliQ_end, names_to = 'Sample', values_to = 'Absorbance', cols_vary = "fastest")
 sapply(CDOM_long, class)
 temp2 <- factor(CDOM_long$Sample, levels = scan_list)
@@ -101,20 +119,25 @@ levels(CDOM_long$Sample)
 filter_vals <- seq(250, 750, by=0.5)
 names(CDOM_long)
 CDOM_long <- filter(CDOM_long, Wavelength_nm %in% filter_vals)
-rm(filter_vals)
+#rm(filter_vals)
 #CDOM_long$Batch <- batch
 
 #create df of the blanks 
 CDOM_blanks <- filter(CDOM_long, Sample %in% blank_list)
 
-## sample as factor, order the data by start to end of the batch
-#CDOM_blanks
-#sapply(CDOM_blanks, class)
-#temp2 <- factor(CDOM_blanks$Sample, levels = blank_list)
-#CDOM_blanks$Sample <- temp2
-#rm(temp2)
-#sapply(CDOM_blanks, class)
-#levels(CDOM_blanks$Sample)
+#remove the blank scans and replace Sample as JCU lab sample ID with station_name_depth
+CDOM_long <- merge(CDOM_long, metadata2, by= "Sample")
+CDOM_long <- arrange(CDOM_long, Wavelength_nm)
+names(CDOM_long)
+CDOM_long <- filter(CDOM_long, Sample %in% samples_list)
+CDOM_long <- CDOM_long %>% select(Wavelength_nm, Absorbance, station_name_depth)
+CDOM_long <- rename(CDOM_long, Sample = station_name_depth)
+CDOM_long <- CDOM_long  %>% relocate(Sample)
+names(CDOM_long)
+typeof(CDOM_long$Absorbance)
+CDOM_long$Sample <- factor(CDOM_long$Sample)
+sapply(CDOM_long, class)
+samples_list <- levels(CDOM_long$Sample)
 
 
 
@@ -140,6 +163,9 @@ batch <- str_remove(batch, "/")
 plotfilename <- paste(batch,"_driftplot", ".jpg",sep = "")
 ggsave(plotfilename, path=plotpath)
 }
+
+
+
 ```
 #convert back to wide format and save a copy of the raw absorbance scan data. note no drift corrected data is generated
 ```{r, include= FLASE}
@@ -199,8 +225,7 @@ rsq <- function(x, y) summary(lm(y~x))$r.squared
     if (exists("CDOM_conv")){ 
       dat <- c()
       dat <- filter(CDOM_long, Sample == f)
-      #dat <- CDOM_long[CDOM_long$Sample == f]#, Absorbance, by=Wavelength_nm]
-      dat$Sample = factor(f)
+      dat$Sample  <-  factor(dat$Sample, levels = f)
       dat2 <- c()
       dat2$Sample = factor(f)
       MeanAbs600_750 <- mean(subset(dat, Wavelength_nm >=600 & Wavelength_nm <=750)$Absorbance, na.rm=TRUE)
