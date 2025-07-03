@@ -144,7 +144,8 @@ ggsave(plotfilename, path=plotpath)
 #convert back to wide format and save a copy of the raw absorbance scan data. note no drift corrected data is generated
 ```{r, include= FLASE}
 {
-CDOM_matrix <- spread(CDOM_long, key = Sample, value = Absorbance)
+#CDOM_matrix <- spread(CDOM_long, key = Sample, value = Absorbance)
+CDOM_matrix <- pivot_wider(CDOM_long, id_cols = Wavelength_nm, names_from = Sample, values_from = Absorbance)
 
 ## write matrix data table to file
 datasave <- paste(wd, "/outputs/data/", batch, "_raw", ".csv", sep="")
@@ -277,9 +278,7 @@ rsq <- function(x, y) summary(lm(y~x))$r.squared
     
     ## create a matrix for CDOM_conv data (i.e. convert to 'wide' format)
     library(tidyr)
-    #to be looked at below (why have to be mean?)
-    ACDOM_matrix <- pivot_wider(CDOM_conv4, names_from = Sample, values_from = Acdom, values_fn = mean)
-   
+    ACDOM_matrix <- pivot_wider(CDOM_conv4, id_cols = Wavelength_nm, names_from = Sample, values_from = Acdom)
     ## write matrix data to file
     write.csv(ACDOM_matrix,file=datasave4, row.names=F) 
   }
