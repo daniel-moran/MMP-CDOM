@@ -19,7 +19,7 @@
 
 #set the wd
 rm(list=ls())
-setwd("R:/Lagoon_WQ/results/CDOM/2021-22 report") # set your working directory
+setwd("R:/Lagoon_WQ/results/CDOM/2024-25 report/WQR") # set your working directory
 wd <- getwd()
 
 # create list of all files in the wd with model443 and Rsquared data fields
@@ -42,13 +42,20 @@ for (x in file_list){
   
 }
 
+View(CDOM_443_all)
 #order by Sample name
 sapply(CDOM_443_all, class)
 CDOM_443_all$model_443 <- as.numeric(CDOM_443_all$model_443)
 CDOM_443_all$Sample <- as.character(CDOM_443_all$Sample)
 CDOM_443_all$r_squared <- as.numeric(CDOM_443_all$r_squared)
 CDOM_443_all <- CDOM_443_all[order(CDOM_443_all$Sample),]
+View(CDOM_443_all)
+
+# there are non-WQR samples from some of the  batches. remove these
+library(tidyverse)
+CDOM_443_all <- CDOM_443_all |> filter(str_detect(Sample,"WQR"))
+
 
 #print the data
 #path <- file.path(wd)
-write.csv(CDOM_443_all,file="2022-23_CDOM443.csv",row.names=F)
+write.csv(CDOM_443_all,file="2024-25_WQR_CDOM443.csv",row.names=F)
