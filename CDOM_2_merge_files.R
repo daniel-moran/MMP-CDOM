@@ -17,13 +17,20 @@
 ###  sub-directories make sure these are hidden by zipping
 ###
 
+
+
+#collate JCU event data from the 24-25 season
+#R:\Lagoon_WQ\results\CDOM\2024-25 report\JCF
+
 #set the wd
 rm(list=ls())
-setwd("R:/Lagoon_WQ/results/CDOM/2021-22 report") # set your working directory
+setwd("R:/Lagoon_WQ/results/CDOM/2024-25 report/JCF") # set your working directory
 wd <- getwd()
 
 # create list of all files in the wd with model443 and Rsquared data fields
-file_list <- list.files(pattern="model443_drift_corr.csv", full.names=FALSE, recursive = TRUE) # recursive = TRUE allows list.files function to look in all subdirectories 
+# include both drift corrected data (AIMS lab) and non-corrected data (JCU)
+file_list <- list.files(pattern="model443*", full.names=FALSE, recursive = TRUE) # recursive = TRUE allows list.files function to look in all subdirectories 
+
 ## import all the model443 .CSVs in the wd to a single dataframe
 ## create a "Filename" column containing the file name associated with each row 
 library(plyr)
@@ -49,6 +56,11 @@ CDOM_443_all$Sample <- as.character(CDOM_443_all$Sample)
 CDOM_443_all$r_squared <- as.numeric(CDOM_443_all$r_squared)
 CDOM_443_all <- CDOM_443_all[order(CDOM_443_all$Sample),]
 
+# there are non-JCF samples from one of the AIMS batches. remove these
+library(tidyverse)
+CDOM_443_all <- CDOM_443_all |> filter(str_detect(Sample,"JCF"))
+
+
 #print the data
 #path <- file.path(wd)
-write.csv(CDOM_443_all,file="2022-23_CDOM443.csv",row.names=F)
+write.csv(CDOM_443_all,file="2024-25_JCF_CDOM443.csv",row.names=F)
