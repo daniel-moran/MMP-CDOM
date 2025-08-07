@@ -19,11 +19,12 @@
 
 #set the wd
 rm(list=ls())
-setwd("R:/Lagoon_WQ/results/CDOM/2024-25 report/WQR") # set your working directory
+setwd("R:/Lagoon_WQ/results/CDOM/2024-25 report/JCZ") # set your working directory
 wd <- getwd()
 
 # create list of all files in the wd with model443 and Rsquared data fields
 file_list <- list.files(pattern="model443_drift_corr.csv", full.names=FALSE, recursive = TRUE) # recursive = TRUE allows list.files function to look in all subdirectories 
+file_list #check that the listed files matches your expectations!
 ## import all the model443 .CSVs in the wd to a single dataframe
 ## create a "Filename" column containing the file name associated with each row 
 library(plyr)
@@ -51,11 +52,11 @@ CDOM_443_all$r_squared <- as.numeric(CDOM_443_all$r_squared)
 CDOM_443_all <- CDOM_443_all[order(CDOM_443_all$Sample),]
 View(CDOM_443_all)
 
-# there are non-WQR samples from some of the  batches. remove these
+# if there are non-target samples from some of the analytical batches then remove them.
 library(tidyverse)
-CDOM_443_all <- CDOM_443_all |> filter(str_detect(Sample,"WQR"))
-
+CDOM_443_all <- CDOM_443_all |> filter(str_detect(Sample,"JCZ"))
+View(CDOM_443_all)
 
 #print the data
 #path <- file.path(wd)
-write.csv(CDOM_443_all,file="2024-25_WQR_CDOM443.csv",row.names=F)
+write.csv(CDOM_443_all,file="2024-25_JCZ_CDOM443.csv",row.names=F)
