@@ -22,28 +22,31 @@ Combine multiple .csv files from a batch of UV-Vis spec outputs into a single da
 Run this script first
 User must: 
 : IN WINDOWS EXPLORER
-: -pull latest version of the code from github repo MMP-CDOM/main. See Daniel Moran for help with this if you need assistance accessing the repo
-: -copy script to the working directory and add batch information to the script filename eg. "CDOM_1_processing_b20241218_FTZ400-412.Rmd"
+: -pull latest version of the code from github repo MMP-CDOM/JCU_lab (or relevent branch). See Daniel Moran for help with this if you need assistance accessing the repo
+: -copy script to the working directory and add batch information to the script filename eg. "CDOM_1_processing_bCDOM-JCU_J25-0095.Rmd"
+: -reveiw the received data for typos, missing data or other errors and then create .CSVs of the raw CDOM absorbance and the chemistry data (used to extract metadata and identify the MMP station names)
 : -create "extra" folder in the working directory and move run notes, a backup of the raw data and any additional files to this folder.
 : IN the R SCRIPT FOR THIS BATCH
 : -reset R session (windows CTRL+SHIFT+F10)
 : -change the wd
 : -change the file string information in "pwd" used for generating filenames to reflect the actual parent folder for the wd. (update to pwd generally only will need to be done for each years' processing if you are not moving the data.)
 N.B.
-data files should only include files that have been auto-exported from the Shimadzu UV-1900 UV-Vis spec.
+Event sampling data files may include a mix of files from AIMS and JCU labs (depending on the workflows utilised during the event sampling). However this script should only include files that have been received from the JCU lab - during 2024-25 processing this data was collated by the JCU lab and provided as seperate tabs in an excel sheet also containing the LIMS chemistry data outputs.
 R for windows does not like '\' so you will need to replace all the '\' in the filepath with '/'
 
 copy file path here:
-R:\Lagoon_WQ\results\CDOM\2024-25 report\JCF\CDOM-JCU_J25-0046
+R:\Lagoon_WQ\results\CDOM\2024-25 report\JCF\CDOM-JCU_J25-0095 #location on RWQPP
+C:\R Working\MMP\CDOM\remote\CDOM\2024-25 report\JCF\CDOM-JCU_J25-0095 #remote copy for working with the script on a local drive if operating remotely
+C:/R Working/MMP/CDOM/remote/CDOM/2024-25 report/JCF/CDOM-JCU_J25-0095
 ---
 
 ## Set the working directory
 ###MUST change '\' to '/' in path
 ```{r, include=FALSE}
 rm(list=ls())
-setwd("R:/Lagoon_WQ/results/CDOM/2024-25 report/JCF/CDOM-JCU_J25-0046")
+setwd("C:/R Working/MMP/CDOM/remote/CDOM/2024-25 report/JCF/CDOM-JCU_J25-0095")
 wd <- getwd()
-pwd<- "R:/Lagoon_WQ/results/CDOM/2024-25 report/JCF"
+pwd<- "C:/R Working/MMP/CDOM/remote/CDOM/2024-25 report/JCF"
 ```
 
 
@@ -65,34 +68,56 @@ library(rlist)
 
 ## Import the data from CSV. 
 ```{r, include= FLASE}
+#be aware that this step/chunk will likely require some manual handling if there are typos or slight changes to formatting coming from the JCU lab
+
 library(tidyverse)
+#library(janitor)
 
 CDOM_comp <- read.csv(file_list[1], header =  TRUE)
 names(CDOM_comp)
 CDOM_comp <- dplyr::rename(CDOM_comp, 'Wavelength_nm' = 'Wavelength.nm.')
 CDOM_comp <- dplyr::rename(CDOM_comp, 'MilliQ_start' = 'Milli.Q')
 CDOM_comp <- dplyr::rename(CDOM_comp, 'MilliQ_end' = 'Milli.Q.1')
+#CDOM_comp <- janitor::clean_names(CDOM_comp)
 names(CDOM_comp)
 
 metaheaders <- read.csv(file_list[2], nrows = 2, header =  FALSE)
 metaheaders = sapply(metaheaders, paste, collapse = "")
+metaheaders
 metadata <- read.csv(file_list[2], skip=3, col.names = metaheaders, header = FALSE)
 metadata <- rename(metadata, short_name = NANA)
 metadata <- rename(metadata, station_name_depth = Bottle.ID.for.Sample.Bottle)
+metadata$station_name_depth
 str_sub(metadata$station_name_depth, 7, 6) <- "_" 
+metadata$station_name_depth
 names(metadata)
 metadata <- metadata %>% mutate(Sample = paste(metadata$Reference, ".", metadata$SampleNo., sep = ""))
 names(metadata)
+metadata$Sample
 metadata <- metadata %>% relocate(Sample, .after = SampleNo.)
 names(metadata)
 metadata <- metadata %>% select(c(Event..:short_name))
 names(metadata)
+metadata$Sample
 metadata$Sample <- str_replace(metadata$Sample, c("-"), c("."))
+metadata$Sample
 metadata <- distinct(metadata)
 metadata2 <- metadata %>% select(c(Sample, station_name_depth))
 
 
 ```
+
+```{r, include= FLASE}
+#only use this chunk if you need to handle rescans or duplicate scans
+#add a row to metadata2 for the rescan of sample JCF442_D0 - including the rescan so the 2 scans can be assessed against each other
+
+#names(CDOM_comp)
+#names(metadata2)
+#metadata2$station_name_depth
+#metadata2 <- metadata2 |> add_row(Sample = "J25.0095.1.1", station_name_depth = "JCF442_D0_2", .before = 2)
+#metadata2
+```
+
 
 ### plot blank curves to look for drift - we are only plotting this to eyeball the control scans and ensure we are happy with the JCU output at a gross level - they only have start and end blank scans and the supplied data does not include timestamps or other analytical metadata so drift corrections are not practical
 
@@ -109,9 +134,8 @@ samples_list <- setdiff(samples_list, "Wavelength_nm")
 
 CDOM_long <- pivot_longer(CDOM_comp, cols = MilliQ_start:MilliQ_end, names_to = 'Sample', values_to = 'Absorbance', cols_vary = "fastest")
 sapply(CDOM_long, class)
-temp2 <- factor(CDOM_long$Sample, levels = scan_list)
-CDOM_long$Sample <- temp2
-rm(temp2)
+CDOM_long <- mutate(CDOM_long, Sample=factor(Sample, levels = scan_list)) 
+#CDOM_long <- CDOM_long |> mutate(Sample=factor(Sample, levels = scan_list)) #as pipe
 sapply(CDOM_long, class)
 levels(CDOM_long$Sample)
 
@@ -119,20 +143,23 @@ levels(CDOM_long$Sample)
 filter_vals <- seq(250, 750, by=0.5)
 names(CDOM_long)
 CDOM_long <- filter(CDOM_long, Wavelength_nm %in% filter_vals)
-#rm(filter_vals)
+CDOM_long$Wavelength_nm
+rm(filter_vals)
 #CDOM_long$Batch <- batch
 
 #create df of the blanks 
 CDOM_blanks <- filter(CDOM_long, Sample %in% blank_list)
 
-#remove the blank scans and replace Sample as JCU lab sample ID with station_name_depth
+#now remove the blank scans and replace Sample as JCU lab sample ID with station_name_depth
+#CDOM_long2 <- filter(CDOM_long, Sample %in% samples_list)
 CDOM_long <- merge(CDOM_long, metadata2, by= "Sample")
+names(CDOM_long)
 CDOM_long <- arrange(CDOM_long, Wavelength_nm)
 names(CDOM_long)
 CDOM_long <- filter(CDOM_long, Sample %in% samples_list)
-CDOM_long <- CDOM_long %>% select(Wavelength_nm, Absorbance, station_name_depth)
+CDOM_long <- CDOM_long |>  select(Wavelength_nm, Absorbance, station_name_depth)
 CDOM_long <- rename(CDOM_long, Sample = station_name_depth)
-CDOM_long <- CDOM_long  %>% relocate(Sample)
+CDOM_long <- CDOM_long  |>  relocate(Sample)
 names(CDOM_long)
 typeof(CDOM_long$Absorbance)
 CDOM_long$Sample <- factor(CDOM_long$Sample)
@@ -167,7 +194,7 @@ ggsave(plotfilename, path=plotpath)
 
 
 ```
-#convert back to wide format and save a copy of the raw absorbance scan data. note no drift corrected data is generated
+#convert back to wide format and save a copy of the raw absorbance scan data. note no drift corrected data is generated - blank drift plots are only generated to allow for qualitative assessment
 ```{r, include= FLASE}
 {
 #CDOM_matrix <- spread(CDOM_long, key = Sample, value = Absorbance)
@@ -186,23 +213,6 @@ write.csv(CDOM_matrix,file=datasave,row.names=F)
 
 #produce and save plots for each sample
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  
 # re-write of code for calculating absorption coefficient etc (above) but using drift corrected data...
 # CDOM data conversions - code from "CALCULATIONS" script by Christian Lomborg, adapted by Daniel Moran to batches of CDOM scans from Shimadzu UV-1900 UV-Vis spec...
 ## Outputs (for each sample):
