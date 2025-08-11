@@ -34,16 +34,16 @@ data files should only include files that have been auto-exported from the Shima
 R for windows does not like '\' so you will need to replace all the '\' in the filepath with '/'
 
 copy file path here:
-R:\Lagoon_WQ\results\CDOM\2024-25 report\FTZ\CDOM-20250616_FTZ435-440
+R:\Lagoon_WQ\results\CDOM\2024-25 report\JCD\CDOM-20250729_JCD478-488
 ---
 
 ## Set the working directory
 ###MUST change '\' to '/' in path
 ```{r, include=FALSE}
 rm(list=ls())
-setwd("R:/Lagoon_WQ/results/CDOM/2024-25 report/FTZ/CDOM-20250616_FTZ435-440")
+setwd("R:/Lagoon_WQ/results/CDOM/2024-25 report/JCD/CDOM-20250729_JCD478-488")
 wd <- getwd()
-pwd<- "R:/Lagoon_WQ/results/CDOM/2024-25 report/FTZ"
+pwd<- "R:/Lagoon_WQ/results/CDOM/2024-25 report/JCD"
 ```
 
 
