@@ -21,27 +21,32 @@
 ###  sub-directories make sure these are hidden by zipping
 ###
 
+
+
 #set the wd
 rm(list=ls())
-setwd("R:/Lagoon_WQ/results/CDOM/2024-25 report/JCZ") # set your working directory
+setwd("R:/Lagoon_WQ/results/CDOM/2025-26 report/WQR") # set your working directory
 wd <- getwd()
 
+#load packages
+library(tidyverse)
+
 # create list of all files in the wd with model443 and Rsquared data fields
-file_list <- list.files(pattern="model443_drift_corr.csv", full.names=FALSE, recursive = TRUE) # recursive = TRUE allows list.files function to look in all subdirectories 
-file_list #check that the listed files matches your expectations!
-## import all the model443 .CSVs in the wd to a single dataframe
+file_list_Acdom <- list.files(pattern="Acdom_drift_corr.csv", full.names=FALSE, recursive = TRUE) # recursive = TRUE allows list.files function to look in all subdirectories 
+file_list_Acdom #check that the listed files matches your expectations!
+## import all the Acdom .CSVs in the wd to a single dataframe
 ## create a "Filename" column containing the file name associated with each row 
-library(plyr)
-for (x in file_list){
+
+for (x in file_list_Acdom){
   # create a dataframe for the merged data
-  if (!exists("CDOM_443_all")){
-    CDOM_443_all<-c()
+  if (!exists("Acdom_all")){
+    Acdom_all<- tibble(Wavelength_nm = seq(from = 250.0, to = 750.0, by = 0.5))
     }
   
   # now append all the data from the different csv files to this dataframe
-  if (exists("CDOM_443_all")){
-    temp_dataset <-ldply(x, read.csv, header=TRUE, skip=0, sep=',',col.names=c('Sample','model_443','r_squared'))
-    CDOM_443_all <- rbind(CDOM_443_all, temp_dataset)
+  if (exists("Acdom_all")){
+    temp_dataset <-ldply(x, read.csv, header=TRUE, skip=0, sep=',')
+    Acdom_all <- Acdom_all  |> full_join(temp_dataset)
     rm(temp_dataset)
   }
   
