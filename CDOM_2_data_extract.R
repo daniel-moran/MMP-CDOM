@@ -9,11 +9,15 @@
 # update 31/05/2023 ?
 # update 12/06/2025 import to github MMP-CDOM repo
 # update: 17/06/2025 moved this script to github repo MMP-CDOM/main and renamed to remove now redundant version control (no longer required with move to github).
+# update:28/04/2026 created new branch (data_extract) and adapted the merge_files script to generating a data extract for external analysis
 
 ###
-### Combine model_443 and Rsquared outputs from each batch into a single dataframe and save as a .csv file
+### extract drift corrected data for specific MMP stations, including modeled and observed data outputs 
+### Note the data needs to be already processed using the appropriate CDOM_1_processing script
 ### Note that R does not like '\' so you will need to replace all the '\' in the filepath with '/'
+
 ### Note that the script collates data from any file with "model443_drift_corr" in the filename, from all subdirectories. If there are any precious processing batches in 
+
 ###  sub-directories make sure these are hidden by zipping
 ###
 
