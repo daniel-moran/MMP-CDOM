@@ -10,6 +10,7 @@
 # update 12/06/2025 import to github MMP-CDOM repo
 # update: 17/06/2025 moved this script to github repo MMP-CDOM/main and renamed to remove now redundant version control (no longer required with move to github).
 # update:28/04/2026 created new branch (data_extract) and adapted the merge_files script to generating a data extract for external analysis
+# update:30/04/2026 included prelim annalysi of the query re cdom holding time
 
 ###
 ### extract drift corrected data for specific MMP stations, including modeled and observed data outputs 
