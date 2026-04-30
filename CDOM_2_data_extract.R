@@ -29,9 +29,9 @@ setwd("R:/Lagoon_WQ/results/CDOM/2025-26 report/WQR") # set your working directo
 wd <- getwd()
 
 #load packages
-
-library(tidyverse)
 library(plyr)
+library(tidyverse)
+library(car)
 
 # create list of all files in the wd with model443 and Rsquared data fields
 file_list_Acdom <- list.files(pattern="Acdom_drift_corr.csv", full.names=FALSE, recursive = TRUE) # recursive = TRUE allows list.files function to look in all subdirectories 
@@ -92,6 +92,7 @@ Acdom_subset_long <- Acdom_subset_long |>
     sample_id_rep %in% c("05", "06", "07", "08") ~ "batch_2",
     sample_id_rep %in% c("09", "10", "11", "12") ~ "batch_3"))
 Acdom_subset_long <- Acdom_subset_long |> group_by(analysis_time)
+
 #Acdom_subset_long$sample_id_rep <- NULL
 
 
@@ -170,7 +171,7 @@ plot_WQR406_3
 #subset the data
 Acdom_443 <- Acdom_subset |> filter(Wavelength_nm == 443.0)
 
-#make the data long/tidy, arrange and create factor groups
+#make the data long/tidy, arrange, and create factor groups
 names(Acdom_443)
 Acdom_443_long <- Acdom_443 |> pivot_longer(WQR405_D0_1:WQR406_D0_12, names_to = "sample_id", values_to = "Acdom") 
 names(Acdom_443_long)
@@ -199,8 +200,65 @@ Acdom_443_long <- Acdom_443_long |>
 levels(Acdom_443_long$station)
 levels(Acdom_443_long$analysis_time)
 
+#2-way ANOVA
+#guidance taken from https://statsandr.com/blog/two-way-anova-in-r/
 
-#visualise using boxplots
+#outline hypotheses
+## Main effect of station on Absorption coefficient:
+##H0: Acdom is equal between stations (open coastal vs mid shelf)
+##H1: Acdom is different between stations (open coastal vs mid shelf)
+## Main effect of timing of the analysis on Absorption coefficient:
+##H0: Acdom is equal between all 3 time points
+##H1: Acdom is different for at least one time point
+## Interaction between station and timing of the analysis:
+##H0: there is no interaction between station and timing of the analysis, meaning that the relationship between timing of the analysis and Acdom is the same for open coastal and mid shelf (similarly, the relationship between station and Acdom is the same for all 3 analysis time points)
+##H1: there is an interaction between station and analysis timing, meaning that the relationship between analysis timing and Acdom is different for open coastal than for mid shelf (similarly, the relationship between station and Acdom depends on the timing of the analysis)
+
+#test assumptions
+#
+#variable types
+##Acdom absorption at 443nm is the dependant variable and is quantitative
+##station is categorical variable with two levels based on the station: WQR405 and WQR 406. note that the stations were chosen to represent different water bodies (WQR405 = mid shelf; WQR406 = open coastal), but also represent CDOM load (WQR405 = low; WQR406 = high) and reactivity (WQR405 = more refractory carbon; WQR406 = more labile carbon) which typically vary between water body's
+##analysis_time is categorical variable with three levels based on timing of the analysis of the replicates. batch_1 were analysed asap (within 2 days - document actual timing); batch_2 were analysed after ~ 1 month; batch_3 were analysed after ~  months. 
+#
+#Independence
+##twelve seperate replicates were subsampled from a single niskin bottle collected at each station. each replicate was individually filtered following stnadard MMP methods (ref). four seperate replicates were analysed and then discarded for each batch of analysis. No samples were analysed more than 1 time. The replicate samples are be independent between groups and within each group.
+#
+#Normality
+##set up the Anova 1st
+#two-way ANOVA
+names(Acdom_443_long)
+ANOVA_443 <- aov(Acdom ~ station * analysis_time, data = Acdom_443_long) #
+#
+#QQ plot of the residuals
+car::qqPlot(ANOVA_443$residuals,
+       id = FALSE # remove point identification
+)
+##points appear to vary some around the line (Henry's line) but are within the confidence interval...review w Renee or maybe Angus or Murray...
+#
+# histogram of the residuals should show normal distribution
+hist(ANOVA_443$residuals) #its kind of skewed to the right...review
+#
+#Shapiro-Wilk normality test
+shapiro.test(ANOVA_443$residuals)
+##data:  ANOVA_443$residuals
+##W = 0.9693, p-value = 0.6498
+## We do not reject the null hypothesis that the residuals follow a normal distribution (p-value = 0.6498)
+# normality tests confirm normality but I do have some questions esp re the histogram. the dataset is somewhat small though. review and discuss potential/merit of data transformation
+#
+# Homogeneity of variances
+#check homogeneity of variances or homoscedasticity by visualisation
+plot(ANOVA_443, which = 3)
+#seems ok to me
+# confirm with Levene’s test
+car::leveneTest(ANOVA_443)
+#Levene's Test for Homogeneity of Variance (center = median)
+#      Df F value Pr(>F)
+#group  5  0.3218 0.8933
+#      18       
+# We do not reject the null hypothesis that the variances are equal (p-value = 0.8933)
+
+#visualise using boxplots, check for extreme outliers
 WQR405_plot443 <- Acdom_443_long |> filter(station == "WQR405") |> 
   ggplot(aes(x = analysis_time, y = Acdom)) + 
   geom_boxplot() +
@@ -221,12 +279,10 @@ plot443 <- ggplot(Acdom_443_long, aes(x = analysis_time, y = Acdom)) +
   xlab('analysis_timing') + 
   facet_wrap(~station, scales = "free_y")
 plot443
+# there appears to be some outliers but I dont think they are extreme so suggest accepting them
+# there appears to be an interaction, based purely on the visualisation
 
-#two-way ANOVA
-names(Acdom_443_long)
-ANOVA_443 <- aov(Acdom ~ station * analysis_time, data = Acdom_443_long) #
-
-#run summary
+#run Anova summary
 summary(ANOVA_443)
 #                        Df Sum Sq Mean Sq   F value   Pr(>F)    
 #  station                1 1.4786  1.4786 50981.129  < 2e-16 ***
@@ -237,7 +293,7 @@ summary(ANOVA_443)
 #  Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
 
 # Run Tukey post-hoc test
-TukeyHSD(ANOVA_443)
+TukeyHSD(ANOVA_443) 
 
 #Tukey multiple comparisons of means
 #95% family-wise confidence level
@@ -272,14 +328,39 @@ TukeyHSD(ANOVA_443)
 #WQR406:batch_3-WQR406:batch_2 -0.012334872 -0.024436937 -0.0002328067 0.0442879
 #WQR406:batch_3-WQR405:batch_3  0.481771535  0.469669470  0.4938735999 0.0000000
 
+#Tukey test again but with only the facotr with 3 levels - analysis_time
+TukeyHSD(ANOVA_443, which = "analysis_time") # run the tukey test on the factor analysis_time since there are only 2 levels of station so its not required there
+#there is a significant difference between batch_1 and batch_3
+#Tukey multiple comparisons of means
+#95% family-wise confidence level
+#
+#Fit: aov(formula = Acdom ~ station * analysis_time, data = Acdom_443_long)
+#
+#$analysis_time
+#diff          lwr           upr     p adj
+#batch_2-batch_1 -0.006268892 -0.013141068  0.0006032835 0.0772906
+#batch_3-batch_1 -0.008683173 -0.015555348 -0.0018109970 0.0124203
+#batch_3-batch_2 -0.002414281 -0.009286456  0.0044578952 0.6492768
 
+
+#Tukey test on the interaction only - analysis_time
+TukeyHSD(ANOVA_443, which = "station:analysis_time") # run the tukey test on the interaction 
+#there are some meaningless pairwise comparisons so we should ignore those (review).
+#meaningful outputs:
+#$`station:analysis_time`
+#                                  diff          lwr           upr     p adj
+#WQR405:batch_2-WQR405:batch_1 -0.004144847 -0.016246912  0.0079572181 0.8796842
+#WQR405:batch_3-WQR405:batch_1  0.003361464 -0.008740601  0.0154635288 0.9458824
+#WQR406:batch_2-WQR406:batch_1 -0.008392937 -0.020495003  0.0037091275 0.2832486
+#WQR406:batch_3-WQR406:batch_1 -0.020727809 -0.032829874 -0.0086257442 0.0004416
 
 ##To do
 
-#better explore the data to ensure it meets the assumption of the ANOVA
 
-#pick apart the interaction between station and Analysis time more - from the tukey test the relevent comparisons are:
-##  diff          lwr           upr     p adj
+#review analysis options - look at hierarchical design...
+
+#pick apart the interaction between station and analysis_time more - from the tukey test the relevent comparisons are:
+##  `station:analysis_time`       diff          lwr          upr          p adj
 ##  WQR405:batch_2-WQR405:batch_1 -0.004144847 -0.016246912  0.0079572181 0.8796842 
 ##  WQR405:batch_3-WQR405:batch_1  0.003361464 -0.008740601  0.0154635288 0.9458824
 ##  WQR406:batch_2-WQR406:batch_1 -0.008392937 -0.020495003  0.0037091275 0.2832486
@@ -287,8 +368,8 @@ TukeyHSD(ANOVA_443)
 
 #migrate to Rmd
 
-#explore other dependent variables and look at 
-##  model and extract other wavelengths (which), compare using multivariate analysis
-##  model and extract S, compare using multivariate analysis 
+#explore other dependent variables including 
+##  extract other wavelengths (which?), compare using visualisation and multivariate analysis
+##  model and extract S, compare using visualisation and multivariate analysis 
 
 
