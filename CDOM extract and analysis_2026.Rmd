@@ -31,15 +31,22 @@ output: html_document
 #| label: setup
 #| eval: true
 
-#set the wd
+#clear the environment 
 rm(list=ls())
-setwd("R:/Lagoon_WQ/results/CDOM/2025-26 report/WQR") # set your working directory
-wd <- getwd()
 
 #load packages
 library(plyr)
 library(tidyverse)
 library(car)
+
+#set the wd
+#setwd("R:/Lagoon_WQ/results/CDOM/2025-26 report/WQR") # set your working directory # In R Markdown, each code chunk is independent regarding its working directory. If you change the directory inside a chunk, it only lasts for that specific block of code. When the chunk finishes, R resets the directory back to where the .Rmd file is saved
+
+knitr::opts_knit$set(root.dir = 'R:/Lagoon_WQ/results/CDOM/2025-26 report/WQR') #To change the working directory for the entire notebook permanently, set the root.dir in your initial "setup" chunk
+
+wd <- getwd()
+
+
 
 
 ```
@@ -48,11 +55,11 @@ library(car)
 #| label: read in the required data
 #| eval: true
 
-# create list of all files in the wd with model443 and Rsquared data fields
-file_list_Acdom <- list.files(pattern="Acdom_drift_corr.csv", full.names=FALSE, recursive = TRUE) # recursive = TRUE allows list.files function to look in all subdirectories 
+# create list of all files in the wd with drift corrected Acdom data fields
+file_list_Acdom <- list.files(pattern="Acdom_drift_corr.csv", full.names=FALSE, recursive = TRUE) # recursive = TRUE allows list.files function to look in all subdirectories. if there are lots of subdirectories this can take some time
 file_list_Acdom #check that the listed files matches your expectations!
 
-## import all the Acdom .CSVs in the wd to a single dataframe
+## import all the Acdom .CSVs in the wd to a single dataframe #
 
 for (x in file_list_Acdom){
   # create a dataframe for the merged data
@@ -72,21 +79,24 @@ for (x in file_list_Acdom){
 #filter the data to be extracted
 names(Acdom_all)
 all_stations <- names(Acdom_all)
-target_list <- all_stations[grepl("Wav|WQR405_D0|WQR406_D0", all_stations)]
-Acdom_subset <- Acdom_all |> select(all_of(target_list)) |> as_tibble() 
+target_stations <- all_stations[grepl("Wav|WQR405_D0|WQR406_D0", all_stations)] #refine a list of scans to be extracted
+Acdom_subset <- Acdom_all |> select(all_of(target_stations)) |> as_tibble() 
 names(Acdom_subset)
-Acdom_subset <- dplyr::rename(Acdom_subset, WQR405_D0_1 = WQR405_D0, WQR406_D0_1 = WQR406_D0)
+Acdom_subset <- dplyr::rename(Acdom_subset, WQR405_D0_1 = WQR405_D0, WQR406_D0_1 = WQR406_D0) #rename to maintain consistent nomenclature
 names(Acdom_subset)
-stn_order <- names(Acdom_subset)[order(names(Acdom_subset))]
+stn_order <- names(Acdom_subset)[order(names(Acdom_subset))] #create a list of the required station that is ordered alphanumerically
+#in this instance the 'reps' dont include leading zeros so the order is wacko. I've ordered it manually (below) by rearranging the output from the previous line. for extracting typical MMP data this should not be required.
 stn_order <- c("Wavelength_nm", "WQR405_D0_1", "WQR405_D0_2", "WQR405_D0_3", "WQR405_D0_4", "WQR405_D0_5", "WQR405_D0_6", "WQR405_D0_7", 
                "WQR405_D0_8", "WQR405_D0_9", "WQR405_D0_10", "WQR405_D0_11",  "WQR405_D0_12", "WQR406_D0_1", "WQR406_D0_2", "WQR406_D0_3", 
                "WQR406_D0_4", "WQR406_D0_5", "WQR406_D0_6", "WQR406_D0_7", "WQR406_D0_8", "WQR406_D0_9", "WQR406_D0_10", "WQR406_D0_11", 
                "WQR406_D0_12")
 Acdom_subset <- Acdom_subset |> select(all_of(stn_order))
+names(Acdom_subset)
+
 
 #print the data
 #path <- file.path(wd)
-write.csv(Acdom_subset,file="CDOM_holding_time_ACDOM_driftcorr.csv",row.names=F)
+#write.csv(Acdom_subset,file="CDOM_holding_time_ACDOM_driftcorr.csv",row.names=F) #remove # to print the data again
 
 
 
@@ -97,31 +107,34 @@ write.csv(Acdom_subset,file="CDOM_holding_time_ACDOM_driftcorr.csv",row.names=F)
 #| label: visualise and explore
 #| eval: true
 
-#Start by having a look at all the scans plotted together
+
 #convert to long format and arrange in order
 names(Acdom_subset)
 Acdom_subset_long <- Acdom_subset |> pivot_longer(WQR405_D0_1:WQR406_D0_12, names_to = "sample_id", values_to = "Acdom") 
 names(Acdom_subset_long)
-Acdom_subset_long <- Acdom_subset_long |> dplyr::rename(sample_id_x = sample_id)
-Acdom_subset_long <- Acdom_subset_long |> mutate(sample_id_rep = str_sub(sample_id_x, start = 11))
-Acdom_subset_long <- Acdom_subset_long |> mutate(sample_id = str_sub(sample_id_x, start = 1, end = 10))
-Acdom_subset_long$sample_id_rep <- str_pad(Acdom_subset_long$sample_id_rep, width = 2, pad = "0") 
-Acdom_subset_long <- Acdom_subset_long |> mutate(sample_id = paste0(sample_id, sample_id_rep))
-Acdom_subset_long <- Acdom_subset_long |> mutate(station = str_sub(sample_id_x, start = 1, end = 6))
-Acdom_subset_long$sample_id_x <- NULL
-Acdom_subset_long <- Acdom_subset_long |> relocate(sample_id, .after = Wavelength_nm)
+Acdom_subset_long <- Acdom_subset_long |> dplyr::rename(sample_id_x = sample_id) #the extracted dataset has reps in the sample_id field but they are not padded with leading zeros so the order is wacko
+Acdom_subset_long <- Acdom_subset_long |> mutate(sample_id_rep = str_sub(sample_id_x, start = 11)) #separate the 'rep' component
+Acdom_subset_long <- Acdom_subset_long |> mutate(sample_id = str_sub(sample_id_x, start = 1, end = 10)) #separate the 'sample_id' component
+Acdom_subset_long$sample_id_rep <- str_pad(Acdom_subset_long$sample_id_rep, width = 2, pad = "0") #pad the rep component with a leading zero
+Acdom_subset_long <- Acdom_subset_long |> mutate(sample_id = paste0(sample_id, sample_id_rep)) #append the sample_id field with the padded rep
+Acdom_subset_long <- Acdom_subset_long |> mutate(station = str_sub(sample_id_x, start = 1, end = 6)) #create a field to group the samples by station
+Acdom_subset_long$sample_id_x <- NULL #sample_id_x no longer needed so remove
+Acdom_subset_long <- Acdom_subset_long |> relocate(sample_id, .after = Wavelength_nm) #visually tidy the dataframe by moving the fields into a logical order
+#create a field to group the samples by the analytical batch (time since sampled when the rep was analysed)
 Acdom_subset_long <- Acdom_subset_long |> 
   mutate(analysis_time = case_when(
     sample_id_rep %in% c("01", "02", "03", "04") ~ "batch_1",
     sample_id_rep %in% c("05", "06", "07", "08") ~ "batch_2",
-    sample_id_rep %in% c("09", "10", "11", "12") ~ "batch_3"))
-Acdom_subset_long <- Acdom_subset_long |> group_by(analysis_time)
+    sample_id_rep %in% c("09", "10", "11", "12") ~ "batch_3")) 
+Acdom_subset_long <- Acdom_subset_long |> group_by(analysis_time) #group by analysis_time
+group_keys(Acdom_subset_long)
 
 #Acdom_subset_long$sample_id_rep <- NULL
 
 
 
 ## plot the data organised by samples, to visually compare
+#Start by having a look at all the scans plotted together
 
 plot1 <- ggplot(Acdom_subset_long, aes(x = Wavelength_nm, y = Acdom, group = sample_id, colour = sample_id)) + 
     geom_line(linewidth = 0.1) +
@@ -190,40 +203,23 @@ plot_WQR406_3
 
 #save the plots as reqd
 
+
 ```
 
 
 ```{r}
-#| label: extract specific wavelegths or variables and analyse
+#| label: extract Acdom from specific wavelengths, visualise and analyse
 #| eval: true
 
-#extract Acdom_443, compare using multivariate analysis 
+#extract Acdom_443, visualise the data from this wavelngth, compare using multivariate analysis 
 
 #subset the data
-Acdom_443 <- Acdom_subset |> filter(Wavelength_nm == 443.0)
-
-#make the data long/tidy, arrange, and create factor groups
-names(Acdom_443)
-Acdom_443_long <- Acdom_443 |> pivot_longer(WQR405_D0_1:WQR406_D0_12, names_to = "sample_id", values_to = "Acdom") 
-names(Acdom_443_long)
-Acdom_443_long <- Acdom_443_long |> dplyr::rename(sample_id_x = sample_id)
-Acdom_443_long <- Acdom_443_long |> mutate(sample_id_rep = str_sub(sample_id_x, start = 11))
-Acdom_443_long <- Acdom_443_long |> mutate(sample_id = str_sub(sample_id_x, start = 1, end = 10))
-Acdom_443_long$sample_id_rep <- str_pad(Acdom_443_long$sample_id_rep, width = 2, pad = "0") 
-Acdom_443_long <- Acdom_443_long |> mutate(sample_id = paste0(sample_id, sample_id_rep))
-Acdom_443_long <- Acdom_443_long |> mutate(station = str_sub(sample_id_x, start = 1, end = 6))
-Acdom_443_long$sample_id_x <- NULL
-Acdom_443_long <- Acdom_443_long |> relocate(sample_id, .after = Wavelength_nm)
-Acdom_443_long <- Acdom_443_long |> 
-  mutate(analysis_time = case_when(
-    sample_id_rep %in% c("01", "02", "03", "04") ~ "batch_1",
-    sample_id_rep %in% c("05", "06", "07", "08") ~ "batch_2",
-    sample_id_rep %in% c("09", "10", "11", "12") ~ "batch_3"))
-Acdom_443_long <- Acdom_443_long |> group_by(station, analysis_time)
+Acdom_443_long <- Acdom_subset_long |> filter(Wavelength_nm == 443.0)
 #Acdom_subset_long$sample_id_rep <- NULL
-
+Acdom_443_long <- Acdom_443_long |> group_by(station, analysis_time)
 group_keys(Acdom_443_long)
 
+#create factors to feed into the ANOVA and plots
 Acdom_443_long <- Acdom_443_long |> 
   mutate(
     station = factor(station),
@@ -253,13 +249,13 @@ levels(Acdom_443_long$analysis_time)
 ##analysis_time is categorical variable with three levels based on timing of the analysis of the replicates. batch_1 were analysed asap (within 2 days - document actual timing); batch_2 were analysed after ~ 1 month; batch_3 were analysed after ~  months. 
 #
 #Independence
-##twelve seperate replicates were subsampled from a single niskin bottle collected at each station. each replicate was individually filtered following stnadard MMP methods (ref). four seperate replicates were analysed and then discarded for each batch of analysis. No samples were analysed more than 1 time. The replicate samples are be independent between groups and within each group.
+##twelve seperate replicates were subsampled from a single niskin bottle collected at each station. each replicate was individually filtered following standard MMP methods (ref). four separate replicates were analysed and then discarded for each batch of analysis. No samples were analysed more than 1 time. The replicate samples are independent between groups and within each group.
 #
 #Normality
 ##set up the Anova 1st
 #two-way ANOVA
 names(Acdom_443_long)
-ANOVA_443 <- aov(Acdom ~ station * analysis_time, data = Acdom_443_long) #
+ANOVA_443 <- aov(Acdom ~ station * analysis_time, data = Acdom_443_long) 
 #
 #QQ plot of the residuals
 car::qqPlot(ANOVA_443$residuals,
@@ -268,7 +264,7 @@ car::qqPlot(ANOVA_443$residuals,
 ##points appear to vary some around the line (Henry's line) but are within the confidence interval...review w Renee or maybe Angus or Murray...
 #
 # histogram of the residuals should show normal distribution
-hist(ANOVA_443$residuals) #its kind of skewed to the right...review
+hist(ANOVA_443$residuals) #its kind of skewed to the right... but its a small dataset...I think its fine but could benefit from review
 #
 #Shapiro-Wilk normality test
 shapiro.test(ANOVA_443$residuals)
@@ -359,7 +355,7 @@ TukeyHSD(ANOVA_443)
 #WQR406:batch_3-WQR406:batch_2 -0.012334872 -0.024436937 -0.0002328067 0.0442879
 #WQR406:batch_3-WQR405:batch_3  0.481771535  0.469669470  0.4938735999 0.0000000
 
-#Tukey test again but with only the facotr with 3 levels - analysis_time
+#Tukey test again but with only the factor with 3 levels - analysis_time
 TukeyHSD(ANOVA_443, which = "analysis_time") # run the tukey test on the factor analysis_time since there are only 2 levels of station so its not required there
 #there is a significant difference between batch_1 and batch_3
 #Tukey multiple comparisons of means
@@ -374,7 +370,7 @@ TukeyHSD(ANOVA_443, which = "analysis_time") # run the tukey test on the factor 
 #batch_3-batch_2 -0.002414281 -0.009286456  0.0044578952 0.6492768
 
 
-#Tukey test on the interaction only - analysis_time
+#Tukey test on the interaction only - station:analysis_time
 TukeyHSD(ANOVA_443, which = "station:analysis_time") # run the tukey test on the interaction 
 #there are some meaningless pairwise comparisons so we should ignore those (review).
 #meaningful outputs:
@@ -392,20 +388,18 @@ TukeyHSD(ANOVA_443, which = "station:analysis_time") # run the tukey test on the
 
 ##To do
 
-
-#review analysis options - look at hierarchical design...
-
 #pick apart the interaction between station and analysis_time more - from the tukey test the relevent comparisons are:
-##  `station:analysis_time`       diff          lwr          upr          p adj
+##  station:analysis_time          diff          lwr          upr          p adj
 ##  WQR405:batch_2-WQR405:batch_1 -0.004144847 -0.016246912  0.0079572181 0.8796842 
 ##  WQR405:batch_3-WQR405:batch_1  0.003361464 -0.008740601  0.0154635288 0.9458824
 ##  WQR406:batch_2-WQR406:batch_1 -0.008392937 -0.020495003  0.0037091275 0.2832486
 ##  WQR406:batch_3-WQR406:batch_1 -0.020727809 -0.032829874 -0.0086257442 0.0004416
 
-#migrate to Rmd - I have migrated and pushed sections of code into chuncks (7/5/26) but still need to review and make sure they run smoothly
+#migrate to Rmd - I have migrated and pushed sections of code into chuncks (7/5/26) and reviewed the chunks (19/5/26). should all work now
 
 #explore other dependent variables including 
 ##  extract other wavelengths (which?), compare using visualisation and multivariate analysis
-##  model and extract S, compare using visualisation and multivariate analysis 
+##  490 (KD490), 750 (TSS??), a lower wavelength. review the lit and talk to Caro
+
 
 
