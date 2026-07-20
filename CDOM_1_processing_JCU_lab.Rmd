@@ -16,6 +16,7 @@ update: 10/02/2023 added additional details to the upfront instructions.
 update: 10/05/2023 changed the theme for the blank driftplots from "theme_minimal" to "theme_gray" due to problems we were having black plot backgrounds being output on some user laptops - not sure what the issue was but perhaps related to user settings somehow - "theme_gray" seems to have solved the problem.
 update: 04/03/2025 arbitrary version update before start  of 2024-25 conversions
 update: 17/06/2025 moved this script to github repo MMP-CDOM/main and renamed to remove now redundant version control (no longer required with move to github). Confirmed this script compatible with R version 4.3.1 (2023-06-16 ucrt) -- "Beagle Scouts" and RStudio 2025.05.1+513 "Mariposa Orchid" Release (ab7c1bc795c7dcff8f26215b832a3649a19fc16c, 2025-06-01) for windows.
+update: 20/07/2026 adjustments for 2025-26 JCU lab data. 
 
 This script is confirmed to be compatible with R version 4.3.1 and Rstudio version 2025.05.1+513
 Combine multiple .csv files from a batch of UV-Vis spec outputs into a single data table and convert to absorption coefficients
@@ -35,18 +36,17 @@ Event sampling data files may include a mix of files from AIMS and JCU labs (dep
 R for windows does not like '\' so you will need to replace all the '\' in the filepath with '/'
 
 copy file path here:
-R:\Lagoon_WQ\results\CDOM\2024-25 report\JCF\CDOM-JCU_J25-0095 #location on RWQPP
-C:\R Working\MMP\CDOM\remote\CDOM\2024-25 report\JCF\CDOM-JCU_J25-0095 #remote copy for working with the script on a local drive if operating remotely
-C:/R Working/MMP/CDOM/remote/CDOM/2024-25 report/JCF/CDOM-JCU_J25-0095
+R:\Lagoon_WQ\results\CDOM\2025-26 report\JCE\J26-0029 #location on RWQPP
+
 ---
 
 ## Set the working directory
 ###MUST change '\' to '/' in path
 ```{r, include=FALSE}
 rm(list=ls())
-setwd("C:/R Working/MMP/CDOM/remote/CDOM/2024-25 report/JCF/CDOM-JCU_J25-0095")
+setwd("R:/Lagoon_WQ/results/CDOM/2025-26 report/JCE/J26-0029")
 wd <- getwd()
-pwd<- "C:/R Working/MMP/CDOM/remote/CDOM/2024-25 report/JCF"
+pwd<- "R:/Lagoon_WQ/results/CDOM/2025-26 report/JCE"
 ```
 
 
@@ -61,7 +61,7 @@ dir.create(file.path(wd,"outputs","data"))
 ## create lists of all files in the wd
 ```{r, include= FALSE}
 library(rlist)
-{file_list <- list.files(wd, pattern=".csv", full.names=TRUE)
+{file_list <- list.files(wd, pattern=".xl", full.names=TRUE)
 }
 ```
 
@@ -71,35 +71,43 @@ library(rlist)
 #be aware that this step/chunk will likely require some manual handling if there are typos or slight changes to formatting coming from the JCU lab
 
 library(tidyverse)
-#library(janitor)
+library(readxl) #for reading in excel files (output from salinometer)
+library(janitor)
 
-CDOM_comp <- read.csv(file_list[1], header =  TRUE)
+CDOM_comp <- read_excel(file_list[2], sheet = 2, col_names = TRUE) #for excel files - we most likey will receive .xls or .xlsx rather than csv
+#CDOM_comp <- read.csv(file_list[1], header =  TRUE) #for csv files
 names(CDOM_comp)
-CDOM_comp <- dplyr::rename(CDOM_comp, 'Wavelength_nm' = 'Wavelength.nm.')
-CDOM_comp <- dplyr::rename(CDOM_comp, 'MilliQ_start' = 'Milli.Q')
-CDOM_comp <- dplyr::rename(CDOM_comp, 'MilliQ_end' = 'Milli.Q.1')
+CDOM_comp <- dplyr::rename(CDOM_comp, 'Wavelength_nm' = 'Wavelength nm.')
+CDOM_comp <- dplyr::rename(CDOM_comp, 'MilliQ_start' = 'Milli-Q...2')
+CDOM_comp <- dplyr::rename(CDOM_comp, 'MilliQ_end' = 'Milli-Q...7')
 #CDOM_comp <- janitor::clean_names(CDOM_comp)
 names(CDOM_comp)
 
-metaheaders <- read.csv(file_list[2], nrows = 2, header =  FALSE)
-metaheaders = sapply(metaheaders, paste, collapse = "")
+metaheaders <- read_excel(file_list[1], n_max = 1, col_names =  TRUE) #check the deaders they are often across 2 lines from JCU LIMS output
+#metaheaders <- metaheaders |> janitor::clean_names()
+metaheaders <- names(metaheaders)
+#metaheaders <- read.csv(file_list[2], nrows = 2, header =  FALSE)
+#metaheaders = sapply(metaheaders, paste, collapse = "")
 metaheaders
-metadata <- read.csv(file_list[2], skip=3, col.names = metaheaders, header = FALSE)
-metadata <- rename(metadata, short_name = NANA)
-metadata <- rename(metadata, station_name_depth = Bottle.ID.for.Sample.Bottle)
-metadata$station_name_depth
-str_sub(metadata$station_name_depth, 7, 6) <- "_" 
-metadata$station_name_depth
+metadata <- read_excel(file_list[1], skip=2, col_names = metaheaders)
+metadata <- metadata %>% select(c(1:5))
+#metadata <- read.csv(file_list[2], skip=3, col.names = metaheaders, header = FALSE)
+#metadata <- rename(metadata, short_name = sample_description)
 names(metadata)
-metadata <- metadata %>% mutate(Sample = paste(metadata$Reference, ".", metadata$SampleNo., sep = ""))
+metadata <- rename(metadata, station_name_depth = "Bottle ID for Sample Bottle")
+metadata$station_name_depth
+#str_sub(metadata$station_name_depth, 7, 6) <- "_" #add underscore between station and depth code if multiple peths are sampled
+#metadata$station_name_depth
+names(metadata)
+metadata <- metadata %>% mutate(Sample = paste(metadata$Reference, "/", metadata$"Sample No.", sep = ""))
 names(metadata)
 metadata$Sample
-metadata <- metadata %>% relocate(Sample, .after = SampleNo.)
+metadata <- metadata %>% relocate(Sample, .after = "Sample No.")
 names(metadata)
-metadata <- metadata %>% select(c(Event..:short_name))
-names(metadata)
+#metadata <- metadata %>% select(c(Event..:short_name))
+#names(metadata)
 metadata$Sample
-metadata$Sample <- str_replace(metadata$Sample, c("-"), c("."))
+#metadata$Sample <- str_replace(metadata$Sample, c("-"), c("_"))
 metadata$Sample
 metadata <- distinct(metadata)
 metadata2 <- metadata %>% select(c(Sample, station_name_depth))
