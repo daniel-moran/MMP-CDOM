@@ -17,6 +17,10 @@ update: 10/05/2023 changed the theme for the blank driftplots from "theme_minima
 update: 04/03/2025 arbitrary version update before start  of 2024-25 conversions
 update: 17/06/2025 moved this script to github repo MMP-CDOM/main and renamed to remove now redundant version control (no longer required with move to github). Confirmed this script compatible with R version 4.3.1 (2023-06-16 ucrt) -- "Beagle Scouts" and RStudio 2025.05.1+513 "Mariposa Orchid" Release (ab7c1bc795c7dcff8f26215b832a3649a19fc16c, 2025-06-01) for windows.
 update: 20/07/2026 adjustments for 2025-26 JCU lab data. 
+update: 12/08/2026: due to a mistake in the script the model was not previously being fitted over narrower range 350-680nm (it was only being plotted over that range). I have now improved model fit by adjusting to fit the model over range 380-680nm. This has narrowed the range and also avoids instrument noise from lamp changeover (worst between 340-380nm - noise created by the end range of the tungsten (visible) lamp before the change to deuterium (UV) lamp at 340nm). Have also improved fit by refining the starting value for S during model fitting (was start=list(S=1), now start=list(S=0.015)) since the model was falling over over the reduced range du to high starting value for S. I also tried adding K factor to model (K accounts for residual scattering or baseline offsets), although this appears to provide a slight improvement to R2 the model without K provides a better representation of Acdom(443) (based on examinations using test data from batch CDOM-20251210_CYA001-005_&_CYA037-041_&_CYA049-050) so I have continued to model without K. (noting that inner filter corrections are already applied by subtracting mean absorbance 600-750 nm during conversion to Acdom)
+                    - variance in modelled Acdom(443) from observed using model without K: mean = 0.00001, stdev = 0.003955274
+                    - variance in modelled Acdom(443) from observed using model with K: mean = -0.001328288, stdev = 0.003211442
+      NOTE I HAVE NOT TESTED THE REDUCED MODEL FITTING RANGE YET THIS NEEDS TO BE DEBUGGED BEOFRE NEXT TIME WE RECIEVE OR PROCESS DATA
 
 This script is confirmed to be compatible with R version 4.3.1 and Rstudio version 2025.05.1+513
 Combine multiple .csv files from a batch of UV-Vis spec outputs into a single data table and convert to absorption coefficients
@@ -236,48 +240,58 @@ rsq <- function(x, y) summary(lm(y~x))$r.squared
 
   for (f in samples_list) {
     if (!exists("CDOM_conv")){
-      CDOM_conv <- c()
-      CDOM_conv2 <- c()
-      CDOM_conv3 <- c()
+      CDOM_conv <- list()
+      CDOM_conv2 <- list()
+      CDOM_conv3 <- list()
     }
     if (exists("CDOM_conv")){ 
-      dat <- c()
+      dat <- list()
       dat <- filter(CDOM_long, Sample == f)
       dat$Sample  <-  factor(dat$Sample, levels = f)
-      dat2 <- c()
-      dat2$Sample = factor(f)
+      dat2 <- list()
+      dat2$Sample  <-  factor(f)
       MeanAbs600_750 <- mean(subset(dat, Wavelength_nm >=600 & Wavelength_nm <=750)$Absorbance, na.rm=TRUE)
       dat2$MeanAbs600_750_raw <- MeanAbs600_750
-      dat$Acdom = 23.03 * (dat$Absorbance - MeanAbs600_750)
+      dat$Acdom  <-  23.03 * (dat$Absorbance - MeanAbs600_750)
       
-      Abs350 = dat$Acdom[dat$Wavelength_nm==350]
-      dat2$Abs350 = Abs350
-      deltaLambda = dat$Wavelength_nm - dat$Wavelength_nm[dat$Wavelength_nm==350]
+      Abs350  <-  dat$Acdom[dat$Wavelength_nm==350]
+      dat2$Abs350  <-  Abs350
+      deltaLambda  <-  dat$Wavelength_nm - dat$Wavelength_nm[dat$Wavelength_nm==350]
       dat$deltaLambda <- deltaLambda
-      Abs443 = dat$Acdom[dat$Wavelength_nm==443]
-      dat2$Abs443 = Abs443
+      Abs443  <-  dat$Acdom[dat$Wavelength_nm==443]
+      dat2$Abs443  <-  Abs443
+      modeldat <- dat |> filter(Wavelength_nm >= 380, Wavelength_nm <= 680) #objective of model fitting is to represent absorbance of the visible spectra and generate fitted Acdom(443) so am reducing the fitting range to 380-680nm. this avoids noisier segment off the spectrum between 340-380 due to instrument artefacts (lamp changover). note the reference wavelength is stil 350nm
+      
+      #dat.nls <- nls(Acdom ~ Abs350*exp(-S*deltaLambda) + K,
+      #               data=modeldat, start=list(S=0.015, K = 0), control=nls.control(maxiter=1000)) 
       
       dat.nls <- nls(Acdom ~ Abs350*exp(-S*deltaLambda),
-                     data=dat, start=list(S=1), control=nls.control(maxiter=1000))
+                     data=modeldat, start=list(S=0.015), control=nls.control(maxiter=1000)) #using model without K. inner filter effects are accounted for in the conversion to Acdom already and the model without K seemed to provide a better representation of Acdom(443)
+      
       summary(dat.nls)
-      dat2$S<-coef(dat.nls)
+      #dat2$S<-coef(dat.nls)
+      dat2$S <- coef(dat.nls)[["S"]]
+      #dat2$K <- coef(dat.nls)[["K"]] #continuing to exclude K
 
-      xs <- seq(350,680,by=0.5) - dat$Wavelength_nm[dat$Wavelength_nm==350]
+      xs <- seq(380,680,by=0.5) - dat$Wavelength_nm[dat$Wavelength_nm==350]
       newdata <- data.frame(deltaLambda=xs)
       fit <- predict(dat.nls, newdata=newdata)
       newdata <- cbind(newdata, fit)
-      newdata$Sample = factor(f)
+      newdata$Sample  <-  factor(f)
       newdata$wavelength_nm <- newdata$deltaLambda + 350
       
       GoF_temp <- newdata
-      data1 <- filter(dat, Wavelength_nm >= 350.0 & Wavelength_nm <= 680.0)
-      GoF_temp$Acdom = data1$Acdom
+      data1 <- filter(dat, Wavelength_nm >= 380.0 & Wavelength_nm <= 680.0)
+      GoF_temp$Acdom  <-  data1$Acdom
       r_squared <- rsq(GoF_temp$Acdom, GoF_temp$fit)
       
       plotpath <- file.path(wd,"outputs","plots")
       plotfilename <- paste(dat2$Sample,".jpg",sep = "")
       print(ggplot(dat, aes(y=Acdom, x=Wavelength_nm)) + geom_line()+
-              geom_line(data=newdata, aes(y=fit, x=wavelength_nm), color='red')+ggtitle(paste(dat2$Sample,': S=',dat2$S, ', ', 'R^2=', r_squared))+
+              geom_line(data=newdata, aes(y=fit, x=wavelength_nm), color='red')+
+              #geom_point(data=newdata, aes(y=resid, x=wavelength_nm), color='blue', size=0.1)+
+              #ggtitle(paste(dat2$Sample,': S=', sprintf("%.4f",dat2$S), ', ', 'R^2=', sprintf("%.4f",r_squared), ', ', 'K=', sprintf("%.3f",dat2$K)))+
+              ggtitle(paste(dat2$Sample,': S=',dat2$S, ', ', 'R^2=', r_squared))+
               scale_y_continuous(expression(A[cdom]))+
               scale_x_continuous(expression(Wavelength (nm))))
       ggsave(plotfilename, path=plotpath)
@@ -289,6 +303,7 @@ rsq <- function(x, y) summary(lm(y~x))$r.squared
       rm(dat)
       rm(dat2)
       rm(newdata)
+      rm(modeldat)
       rm(dat.nls)
       rm(fit)
       rm(xs)
@@ -332,7 +347,7 @@ rsq <- function(x, y) summary(lm(y~x))$r.squared
 ```{r, include= FLASE}
 dat_GoF <- CDOM_conv3
 dat_GoF$deltaLambda <- NULL
-temp <- filter(CDOM_conv4, Wavelength_nm >= 350.0 & Wavelength_nm <= 680.0)
+temp <- filter(CDOM_conv4, Wavelength_nm >= 380.0 & Wavelength_nm <= 680.0)
 dat_GoF$Acdom <- temp$Acdom
 dat_GoF <- dat_GoF[c("Sample", "wavelength_nm", "Acdom", "fit")]
 temp <- NULL
