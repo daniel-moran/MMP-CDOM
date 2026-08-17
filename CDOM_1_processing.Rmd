@@ -45,7 +45,7 @@ R:\Lagoon_WQ\results\CDOM\2025-26 report\CYA\CDOM-20260121_CYA074-078_&_JCE520-5
 ```{r, include=FALSE}
 rm(list=ls())
 knitr::opts_knit$set(root.dir = "R:/Lagoon_WQ/results/CDOM/2025-26 report/WQR/CDOM-20251015_WQR331-347")
-wd <- getwd() #relies on the default working directory based on the location of the script. so users MUST copy the script to the intended wd for the batch that is processing
+wd <- getwd() #relies on the default working directory based on the location of the script. so users MUST copy the script to the folder where the raw scans are located so this becomes the wd for the batch that is processing.
 pwd<- dirname(getwd()) #used for creating file paths and other functions in this script
 
 ```
@@ -54,16 +54,30 @@ pwd<- dirname(getwd()) #used for creating file paths and other functions in this
 ## Create some folders in the wd for saving outputs
 ```{r, include= FALSE}
 getwd()
-{dir.create(file.path(wd,"outputs"))
-dir.create(file.path(wd,"outputs","plots"))
-dir.create(file.path(wd,"outputs","data"))
+
+{dir.create(file.path(wd,"outputs"),
+           showWarnings = FALSE)
+dir.create(file.path(wd,"outputs","plots"),
+           recursive = TRUE,
+           showWarnings = FALSE)
+dir.create(file.path(wd,"outputs","data"),
+           recursive = TRUE,
+           showWarnings = FALSE)
 }
+#{dir.create(file.path(wd,"outputs"))
+#dir.create(file.path(wd,"outputs","plots"))
+#dir.create(file.path(wd,"outputs","data"))
+#}
 ```
 
 ## create lists of all files in the wd
 ```{r, include= FALSE}
 library(rlist)
-{file_list <- list.files(wd, pattern=".csv", full.names=FALSE)
+{
+#list all files
+file_list <- list.files(wd, pattern="\\.csv$", full.names = FALSE) #improved regex
+file_path_list <- list.files(wd, pattern="\\.csv$", full.names = TRUE) #improved regex and full file paths
+#file_list <- list.files(wd, pattern=".csv", full.names=FALSE)
 # list blanks 
 file_list3 <- file_list[grep("illi",file_list)]
 # list files that are real samples, not milliq blanks
@@ -89,10 +103,10 @@ library(plyr)
 CDOM_comp<-data.frame()
 
 # now append all the data from the different csv files to this dataframe
-for (x in file_list){
+for (x in file_path_list){
   if (exists("CDOM_comp")){
     temp_dataset <-ldply(x, read.csv, header=FALSE, skip=39, sep=',',col.names=c('Wavelength_nm','Absorbance'))
-    temp_dataset$Filename = factor(x)
+    temp_dataset$Filename = factor(basename(x)) 
     CDOM_comp <- rbind(CDOM_comp, temp_dataset)
     rm(temp_dataset)
   }
@@ -102,7 +116,7 @@ for (x in file_list){
 
 ## create a second data frame that shows the date/time stamp for analysis of each sample
 ```{r, include= FALSE}
-for (x in list.files(pattern="*.csv")){
+for (x in file_path_list){
   # create a dataframe for the merged data
   if (!exists("Analysis_times")){
     Analysis_times<-list()
@@ -112,7 +126,7 @@ for (x in list.files(pattern="*.csv")){
   if (exists("Analysis_times")){
     temp_dataset <-ldply(x, read.csv, header=FALSE, skip=8, nrows=1, sep=',',col.names=c('title','Analysis_time','Filename'))
     temp_dataset$title <- NULL
-    temp_dataset$Filename = factor(x)
+    temp_dataset$Filename = factor(basename(x))
     Analysis_times <- rbind(Analysis_times, temp_dataset)
     rm(temp_dataset)
   }
