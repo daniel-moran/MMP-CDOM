@@ -44,14 +44,16 @@ R:\Lagoon_WQ\results\CDOM\2025-26 report\CYA\CDOM-20260121_CYA074-078_&_JCE520-5
 ###MUST change '\' to '/' in path
 ```{r, include=FALSE}
 rm(list=ls())
-setwd("R:/Lagoon_WQ/results/CDOM/2025-26 report/CYA/CDOM-20260121_CYA074-078_&_JCE520-521")
-wd <- getwd()
-pwd<- "R:/Lagoon_WQ/results/CDOM/2025-26 report/CYA"
+knitr::opts_knit$set(root.dir = "R:/Lagoon_WQ/results/CDOM/2025-26 report/WQR/CDOM-20251015_WQR331-347")
+wd <- getwd() #relies on the default working directory based on the location of the script. so users MUST copy the script to the intended wd for the batch that is processing
+pwd<- dirname(getwd()) #used for creating file paths and other functions in this script
+
 ```
 
 
 ## Create some folders in the wd for saving outputs
 ```{r, include= FALSE}
+getwd()
 {dir.create(file.path(wd,"outputs"))
 dir.create(file.path(wd,"outputs","plots"))
 dir.create(file.path(wd,"outputs","data"))
@@ -103,7 +105,7 @@ for (x in file_list){
 for (x in list.files(pattern="*.csv")){
   # create a dataframe for the merged data
   if (!exists("Analysis_times")){
-    Analysis_times<-c()
+    Analysis_times<-list()
   }
   
   # now append all the data from the different csv files to this dataframe
@@ -134,7 +136,7 @@ CDOM_data$Sample <- Sample
 CDOM_data$Filename <- NULL
 rm(Sample)
 ## Create a "batch" column containing the processing date for this batch of samples
-Batch_info <- read.csv(x)
+Batch_info <- read.csv(file_list[1]) 
 Batch_dt <- Batch_info[8,]
 Batch_date <- as.Date(Batch_dt, format = "%d/%m/%Y")
 CDOM_data$Batch <- Batch_date
