@@ -547,11 +547,9 @@ CDOM_conv3$wavelength_nm <- CDOM_conv3$deltaLambda + 350
   model_443$fit <- NULL
   model_443$deltaLambda <- NULL
   names(model_443)
-  is.data.table(model_443)
-  setnames(model_443, "Sample", "sample") #change the column name in baseline from "Sample" to "sample"
+  names(datR2)
   #print CDOM_443
-  model_443<- cbind(model_443, datR2$r_squared)
-  colnames(model_443)<- c("Sample", "model_443","r_squared")
+  model_443 <- model_443 |> full_join(datR2)
   datasavemodel443 <- paste("outputs/data/",(gsub(pwd,"",wd)),"_model443_drift_corr",".csv", sep="")
   write.csv(model_443,file=datasavemodel443,row.names=F)
 }
