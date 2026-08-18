@@ -421,22 +421,22 @@ rsq <- function(x, y) summary(lm(y~x))$r.squared
       dat2 <- list()
       dat2$Sample  <-  factor(f)
       MeanAbs600_750 <- mean(subset(dat, Wavelength_nm >=600 & Wavelength_nm <=750)$Abs_corr, na.rm=TRUE)
-      dat2$MeanAbs600_750_raw <- MeanAbs600_750
+      dat2$MeanAbs600_750_corr <- MeanAbs600_750
       dat$Acdom  <-  23.03 * (dat$Abs_corr - MeanAbs600_750)
       
-      Abs350 <-  dat$Acdom[dat$Wavelength_nm==350]
-      dat$Abs350  <-  Abs350
-      dat2$Abs350  <-  Abs350
+      Acdom350 <-  dat$Acdom[dat$Wavelength_nm==350]
+      dat$Acdom350  <-  Acdom350
+      dat2$Acdom350  <-  Acdom350
       deltaLambda  <-  dat$Wavelength_nm - dat$Wavelength_nm[dat$Wavelength_nm==350]
       dat$deltaLambda <- deltaLambda
-      Abs443  <-  dat$Acdom[dat$Wavelength_nm==443]
-      dat2$Abs443  <-  Abs443
+      Acdom443  <-  dat$Acdom[dat$Wavelength_nm==443]
+      dat2$Acdom443  <-  Acdom443
       modeldat <- dat |> filter(Wavelength_nm >= 380, Wavelength_nm <= 680) #objective of model fitting is to represent absorbance of the visible spectra and generate fitted Acdom(443) so am reducing the fitting range to 380-680nm. this avoids noisier segment off the spectrum between 340-380 due to instrument artefacts (lamp changover). note the reference wavelength is stil 350nm
       
-      #dat.nls <- nls(Acdom ~ Abs350*exp(-S*deltaLambda) + K,
+      #dat.nls <- nls(Acdom ~ Acdom350*exp(-S*deltaLambda) + K,
       #               data=modeldat, start=list(S=0.015, K = 0), control=nls.control(maxiter=1000)) 
       
-      dat.nls <- nls(Acdom ~ Abs350*exp(-S*deltaLambda),
+      dat.nls <- nls(Acdom ~ Acdom350*exp(-S*deltaLambda),
                      data=modeldat, start=list(S=0.015), control=nls.control(maxiter=1000)) #using model without K. inner filter effects are accounted for in the conversion to Acdom already and the model without K seemed to provide a better representation of Acdom(443)
       
       summary(dat.nls)
@@ -480,9 +480,9 @@ rsq <- function(x, y) summary(lm(y~x))$r.squared
       rm(fit)
       rm(xs)
       rm(MeanAbs600_750)
-      rm(Abs350)
+      rm(Acdom350)
       rm(deltaLambda)
-      rm(Abs443)
+      rm(Acdom443)
       rm(GoF_temp)
       rm(r_squared)
       rm(data1)
