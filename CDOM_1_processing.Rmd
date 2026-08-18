@@ -40,11 +40,26 @@ copy file path here:
 R:\Lagoon_WQ\results\CDOM\2025-26 report\CYA\CDOM-20260121_CYA074-078_&_JCE520-521
 ---
 
+
+
+# setup packages
+```{r, include=FALSE}
+rm(list=ls())
+
+library(dplyr)
+library(data.table)
+library(tidyr)
+library(ggplot2)
+library(plyr)
+library(zoo)
+
+```
+
 ## Set the working directory
 ###MUST change '\' to '/' in path
 ```{r, include=FALSE}
-rm(list=ls())
-knitr::opts_knit$set(root.dir = "R:/Lagoon_WQ/results/CDOM/2025-26 report/WQR/CDOM-20251015_WQR331-347")
+
+#knitr::opts_knit$set(root.dir = "R:/Lagoon_WQ/results/CDOM/2025-26 report/WQR/CDOM-20251015_WQR331-347")
 wd <- getwd() #relies on the default working directory based on the location of the script. so users MUST copy the script to the folder where the raw scans are located so this becomes the wd for the batch that is processing.
 pwd<- dirname(getwd()) #used for creating file paths and other functions in this script
 
@@ -72,7 +87,7 @@ dir.create(file.path(wd,"outputs","data"),
 
 ## create lists of all files in the wd
 ```{r, include= FALSE}
-library(rlist)
+#library(rlist)
 {
 #list all files
 file_list <- list.files(wd, pattern="\\.csv$", full.names = FALSE) #improved regex
@@ -97,7 +112,7 @@ rm(file_list3)
 ## Import all the CSVs in the wd to a single dataframe - also could consider the read_bulk function from the 'readbulk' package
 ## Create a "Filename" column containing the file name associated with each row
 ```{r, include= FALSE}
-library(plyr)
+#library(plyr)
 
 # create a dataframe for the merged data
 CDOM_comp<-data.frame()
@@ -176,7 +191,7 @@ CDOM_data <- CDOM_data[order(CDOM_data$Analysis_time),]
 
 ## create a dataframe with milliQ blanks only
 ```{r, include= FALSE}
-{library(dplyr)
+{#library(dplyr)
 CDOM_blanks <- filter(CDOM_data, Sample %in% blanks_list)
 
 ## sample as factor
@@ -194,7 +209,7 @@ CDOM_blanks <- CDOM_blanks[order(CDOM_blanks$Analysis_time),]
 
 ## plot the data in CDOM_blanks, organise by samples, to look for drift
 ```{r, include= TRUE}
-{library(ggplot2)
+{#library(ggplot2)
 driftplot <- ggplot(CDOM_blanks, aes(x = Wavelength_nm, y = Absorbance, group = Analysis_time, colour = Sample)) + 
   geom_line(size=0.1) +
   ylab('Absorbance') +
@@ -218,7 +233,7 @@ ggsave(plotfilename, path=plotpath)
 ```{r, include= FALSE}
 blanks_250 <- filter(CDOM_blanks, Wavelength_nm == 250.0)
 blanks_250 <- group_by(blanks_250, Sample)
-library(data.table)
+#library(data.table)
 setDT(blanks_250)
 blanks_250[, tdiff_hrs := difftime(Analysis_time, shift(Analysis_time, fill=Analysis_time[1L]), units="hours")]
 blanks_250$tdiff_hrs <- as.numeric(blanks_250$tdiff_hr, units="hours")
@@ -247,8 +262,8 @@ write.csv(blanks_250,file=datasaveblanks250,row.names=F)
 # first create a df from all the data blanks and samples for the analysis time (not abs values)
 ```{r, include= FALSE}
 {names(CDOM_data)
-library(tidyr)
-library(data.table)
+#library(tidyr)
+#library(data.table)
 # create a data table showing the time lapsed between scanning the 1st blank and the subsequent samples/blanks
   dat_order <- CDOM_data
   dat_order$Absorbance <- NULL
@@ -288,7 +303,7 @@ library(data.table)
   baseline <- NULL
   rm(baseline)
   names(correctiondat)
-  library(zoo)
+  #library(zoo)
   correctiondat$Abs_blanks_p <- na.locf(correctiondat$Abs_blanks, fromLast = FALSE) # this is a temp column holding the prev blank abs value (i.e. from the start of each lot of 10 samples), used in calculating the amount of drift to apply to each scan
   correctiondat$Abs_blanks_n <- na.locf(correctiondat$Abs_blanks, fromLast = TRUE) # this is a temp column holding the next blank abs values (i.e. from the end of each lot of 10 samples), used in calculating the amount of drift to apply to each scan
   print(correctiondat[, Abs_delta := Abs_blanks_p-Abs_blanks_n]) # shows the difference between the prev blank and the next blank
@@ -308,7 +323,7 @@ library(data.table)
 
 ## create a dataframe with corrected milliQ blanks only
 ```{r, include= FALSE}
-{library(dplyr)
+{#library(dplyr)
     CDOM_blanks_corr <- filter(correctiondat, Sample %in% blanks_list)
     
     ## sample as factor
@@ -323,7 +338,7 @@ library(data.table)
 
 ## plot the data in CDOM_blanks_corr, organise by samples to see the drift correction
 ```{r, include= TRUE}
-{library(ggplot2)
+{#library(ggplot2)
   driftplot_corr <- ggplot(CDOM_blanks_corr, aes(x = Wavelength_nm, y = Abs_corr, group = Analysis_time, colour = Sample)) + 
     geom_line(size=0.1) +
     ylab('Absorbance') +
@@ -346,7 +361,7 @@ library(data.table)
 
 ## create matrices (i.e. convert to 'wide' format)
 ```{r, include= FALSE}
-{library(tidyr)
+{#library(tidyr)
 dat <- CDOM_data
 dat$Analysis_time <- NULL
 CDOM_matrix <- spread(dat, key = Sample, value = Absorbance)
@@ -492,7 +507,7 @@ rsq <- function(x, y) summary(lm(y~x))$r.squared
     CDOM_conv4$Abs_corr <- NULL
     
     ## create a matrix for CDOM_conv data (i.e. convert to 'wide' format)
-    library(tidyr)
+    #library(tidyr)
     #to be looked at below (why have to be mean?)
     ACDOM_matrix <- pivot_wider(CDOM_conv4, names_from = Sample, values_from = Acdom, values_fn = mean)
    
