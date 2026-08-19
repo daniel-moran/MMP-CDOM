@@ -19,7 +19,7 @@ update: 17/06/2025 moved this script to github repo MMP-CDOM/main and renamed to
 update: 12/08/2026: due to a mistake in the script the model was not previously being fitted over narrower range 350-680nm (it was only being plotted over that range). I have now improved model fit by adjusting to fit the model over range 380-680nm. This has narrowed the range and also avoids instrument noise from lamp changeover (worst between 340-380nm - noise created by the end range of the tungsten (visible) lamp before the change to deuterium (UV) lamp at 340nm). Have also improved fit by refining the starting value for S during model fitting (was start=list(S=1), now start=list(S=0.015)) since the model was falling over over the reduced range du to high starting value for S. I also tried adding K factor to model (K accounts for residual scattering or baseline offsets), although this appears to provide a slight improvement to R2 the model without K provides a better representation of Acdom(443) (based on examinations using test data from batch CDOM-20251210_CYA001-005_&_CYA037-041_&_CYA049-050) so I have continued to model without K. (noting that inner filter corrections are already applied by subtracting mean absorbance 600-750 nm during conversion to Acdom)
                     - variance in modelled Acdom(443) from observed using model without K: mean = 0.00001, stdev = 0.003955274
                     - variance in modelled Acdom(443) from observed using model with K: mean = -0.001328288, stdev = 0.003211442
-update: 18/08/2026:wrap the processing inside funnctions and adjust the script to run multiple batches at once. intended to run a single family of station only) 
+update 18/08/2026: wrap the processing inside functions and adjust the script to run multiple batches at once. Created processing function, safe wrapper to push the processing forward if one batch fails and logging function (intended to run a single family of station only) 
 
 This script is confirmed to be compatible with R version 4.3.1 and Rstudio version 2025.05.1+513
 Combine multiple .csv files from a batch of UV-Vis spec outputs into a single data table and convert to absorption coefficients
@@ -37,8 +37,7 @@ N.B.
 data files should only include files that have been auto-exported from the Shimadzu UV-1900 UV-Vis spec.
 R for windows does not like '\' so you will need to replace all the '\' in the filepath with '/'
 
-copy file path here:
-R:\Lagoon_WQ\results\CDOM\2025-26 report\CYA\CDOM-20260121_CYA074-078_&_JCE520-521
+
 ---
 
 
@@ -58,7 +57,7 @@ library(zoo)
 
 
 
-#set up the processing function and safe wrapper
+#set up the functions: processing, safe wrapper, logging
 ```{r, include=FALSE}
 
 # =====================================================
@@ -70,11 +69,9 @@ process_batch <- function(batch_dir){
   wd <- batch_dir
   pwd <- dirname(batch_dir)
 
-  message("")
-  message("======================================")
-  message("Processing batch: ", basename(batch_dir))
-  message("======================================")
-
+  write_log("=====================================================")
+  write_log(paste("Processing batch: ", basename(batch_dir)))
+  
   # Create output folders
   dir.create(
     file.path(wd, "outputs", "plots"),
@@ -95,8 +92,6 @@ process_batch <- function(batch_dir){
     full.names = TRUE
   )
 
-  message("Found ", length(batch_list), " raw data files")
-
   # Optional - print sample file names
   print(basename(batch_list))
 
@@ -107,12 +102,30 @@ process_batch <- function(batch_dir){
 #list all files
 file_list <- list.files(wd, pattern="\\.csv$", full.names = FALSE) #improved regex
 file_path_list <- list.files(wd, pattern="\\.csv$", full.names = TRUE) #improved regex and full file paths
+write_log("Checkpoint 1: file lists created")
+write_log(paste("Batch folder =", wd))
+
+write_log(paste("CSV files found:", length(file_path_list)))
+
+for(fp in file_path_list){
+  write_log(fp)
+}
+
 #file_list <- list.files(wd, pattern=".csv", full.names=FALSE)
 # list blanks 
 file_list3 <- file_list[grep("illi",file_list)]
 # list files that are real samples, not milliq blanks
 file_list2 <- setdiff(file_list, file_list3)}
 
+write_log("Testing first file")
+
+test <- read.csv(
+  file_path_list[1],
+  header = FALSE,
+  nrows = 5
+)
+
+write_log("First file opened successfully")  
 
 ## list sample names (i.e. without .csv or other suffix)
 {
@@ -141,13 +154,14 @@ for (x in file_path_list){
   
 }
 
+write_log("Checkpoint 2: CDOM_comp created")
 
 ## create a second data frame that shows the date/time stamp for analysis of each sample
 
 for (x in file_path_list){
   # create a dataframe for the merged data
   if (!exists("Analysis_times")){
-    Analysis_times<-list()
+    Analysis_times<-data.frame()
   }
   
   # now append all the data from the different csv files to this dataframe
@@ -161,6 +175,7 @@ for (x in file_path_list){
   
 }
 
+write_log("Checkpoint 3: Analysis_times created")
 
 ## merge the dataframes by Filename
 
@@ -170,6 +185,9 @@ rm(CDOM_comp)
 Analysis_times <- NULL
 rm(Analysis_times)
 
+write_log("Checkpoint 4: CDOM_data merged")
+
+
 ## write a list of sample names based on the file names but without the "_RawData.csv" suffix
 Sample <- gsub("_RawData.csv","",CDOM_data$Filename)
 
@@ -178,9 +196,10 @@ CDOM_data$Sample <- Sample
 CDOM_data$Filename <- NULL
 rm(Sample)
 ## Create a "batch" column containing the processing date for this batch of samples
-Batch_info <- read.csv(file_list[1]) 
+Batch_info <- read.csv(file_path_list[1]) 
 Batch_dt <- Batch_info[8,]
 Batch_date <- as.Date(Batch_dt, format = "%d/%m/%Y")
+write_log(paste("Checking analysis date:", Batch_date))
 CDOM_data$Batch <- Batch_date
 Batch_info <- NULL
 rm(Batch_info)
@@ -238,6 +257,7 @@ plotfilename <- paste(batch,"_driftplot", ".jpg",sep = "")
 ggsave(plotfilename, path=plotpath)
 }
 
+write_log("Checkpoint 5: driftplot created")
 
 
 ##calculate rate of drift @250nm...and compare to sample values.
@@ -245,10 +265,10 @@ ggsave(plotfilename, path=plotpath)
 blanks_250 <- filter(CDOM_blanks, Wavelength_nm == 250.0)
 blanks_250 <- group_by(blanks_250, Sample)
 #library(data.table)
-setDT(blanks_250)
-blanks_250[, tdiff_hrs := difftime(Analysis_time, shift(Analysis_time, fill=Analysis_time[1L]), units="hours")]
-blanks_250$tdiff_hrs <- as.numeric(blanks_250$tdiff_hr, units="hours")
-blanks_250$tdiff_hrs <- cumsum(blanks_250$tdiff)
+blanks_250 <- data.table::setDT(blanks_250)
+blanks_250 <- blanks_250[, tdiff_hrs := difftime(Analysis_time, shift(Analysis_time, fill=Analysis_time[1L]), units="hours")]
+blanks_250$tdiff_hrs <- as.numeric(blanks_250$tdiff_hrs, units="hours")
+blanks_250$tdiff_hrs <- cumsum(blanks_250$tdiff_hrs)
 blanks_250$Absorbance <- as.numeric(as.character(blanks_250$Absorbance))
 baseline <- blanks_250[1, 2]
 blanks_250$baseline <- baseline
@@ -263,10 +283,14 @@ blanks_250$samplemean <- mean_250
 blanks_250$proportion <- blanks_250$absdelta/blanks_250$samplemean
 rm(mean_250)
 #print blanks_250
-blankspath <- file.path(wd,"outputs","data")
-datasaveblanks250 <- paste("outputs/data/",(gsub(pwd,"",wd)),"_blanks_250",".csv", sep="")
+datapath <- file.path(wd,"outputs","data")
+datasaveblanks250 <- paste(datapath,(gsub(pwd,"",wd)),"_blanks_250",".csv", sep="")
+write_log(paste("Confirm data write path: datapath =", datapath))
+write_log(paste("Confirm path and filename for 1st data file: datasaveblanks250 =", datasaveblanks250))
 write.csv(blanks_250,file=datasaveblanks250,row.names=F)
 }
+
+write_log("Checkpoint 6: rate of drift calculated")
 
 # Correct for drift as determined from blanks collected throughout the analysis run (start, end and every 10 samples)
 # set up a correction matrix based on the blanks data
@@ -329,6 +353,7 @@ names(CDOM_data)
   correctiondat2 <- as.data.table(correctiondat2)
   }
 
+write_log("Checkpoint 7: drift correction applied")
 
 ## create a dataframe with corrected milliQ blanks only
 {
@@ -364,6 +389,7 @@ names(CDOM_data)
     ggsave(plotfilename, path=plotpath)
   } 
 
+write_log("Checkpoint 8: driftplot_corr created")
 
 ## create matrices (i.e. convert to 'wide' format)
 {
@@ -374,9 +400,10 @@ dat <- NULL
 rm(dat)}
 
 ## write matrix data table to file
-datasave <- paste("outputs/data/",(gsub(pwd,"",wd)),"_raw",".csv", sep="")
+datasave <- paste(datapath,(gsub(pwd,"",wd)),"_raw",".csv", sep="")
 write.csv(CDOM_matrix,file=datasave,row.names=F)
 
+write_log("Checkpoint 9: raw absorbance data saved")
 
 {correctiondat_wide <- correctiondat
 names(correctiondat_wide)
@@ -396,10 +423,11 @@ correctiondat_wide$drift_base <- NULL
 names(correctiondat_wide)
 correctiondat_wide <- spread(correctiondat_wide, key = Sample, value = Abs_corr)
 ## write matrix data table to file
-datasave <- paste("outputs/data/",(gsub(pwd,"",wd)),"_raw_drift_corr",".csv", sep="")
+datasave <- paste(datapath,(gsub(pwd,"",wd)),"_raw_drift_corr",".csv", sep="")
 write.csv(correctiondat_wide,file=datasave,row.names=F)
 } 
 
+write_log("Checkpoint 10: drift corrected absorbance data saved")
   
 # re-write of code for calculating absorption coefficient etc (above) but using drift corrected data...
 # CDOM data conversions - code from "CALCULATIONS" script by Christian Lomborg, adapted by Daniel Moran to batches of CDOM scans from Shimadzu UV-1900 UV-Vis spec...
@@ -414,15 +442,17 @@ rsq <- function(x, y) summary(lm(y~x))$r.squared
 
   for (f in samples_list) {
     if (!exists("CDOM_conv")){
-      CDOM_conv <- list()
-      CDOM_conv2 <- list()
-      CDOM_conv3 <- list()
+      CDOM_conv <- data.frame()
+      CDOM_conv2 <- data.frame()
+      CDOM_conv3 <- data.frame()
     }
     if (exists("CDOM_conv")){ 
       dat <- correctiondat2[Sample == f, Abs_corr, by=Wavelength_nm]
       dat$Sample  <-  factor(f)
-      dat2 <- list()
-      dat2$Sample  <-  factor(f)
+      
+      dat2 <- data.frame(Sample = factor(f))
+      #dat2 <- data.frame()
+      #dat2$Sample  <-  factor(f)
       MeanAbs600_750 <- mean(subset(dat, Wavelength_nm >=600 & Wavelength_nm <=750)$Abs_corr, na.rm=TRUE)
       dat2$MeanAbs600_750_corr <- MeanAbs600_750
       dat$Acdom  <-  23.03 * (dat$Abs_corr - MeanAbs600_750)
@@ -492,11 +522,12 @@ rsq <- function(x, y) summary(lm(y~x))$r.squared
     }
   }
   
+write_log("Checkpoint 11: Acdom calculated, model fitted and plots created")
 
 ## create an object containing the new directory and name of compiled data to be saved
 {
-    datasave2 <- paste("outputs/data/",(gsub(pwd,"",wd)),"_factors_drift_corr",".csv", sep="")
-    datasave4 <- paste("outputs/data/",(gsub(pwd,"",wd)),"_Acdom_drift_corr",".csv", sep="")
+    datasave2 <- paste(datapath,(gsub(pwd,"",wd)),"_factors_drift_corr",".csv", sep="")
+    datasave4 <- paste(datapath,(gsub(pwd,"",wd)),"_Acdom_drift_corr",".csv", sep="")
     
     ## write data table to file
     write.csv(CDOM_conv2,file=datasave2, row.names=F)
@@ -515,7 +546,7 @@ rsq <- function(x, y) summary(lm(y~x))$r.squared
     write.csv(ACDOM_matrix,file=datasave4, row.names=F) 
   }
  
-
+write_log("Checkpoint 12: factors and Acdom data saved")
 
 ##calculate Rsquared for GoF (loop)
 {
@@ -527,29 +558,26 @@ dat_GoF <- dat_GoF[c("Sample", "wavelength_nm", "Acdom", "fit")]
 temp <- NULL
 rsq <- function(x, y) summary(lm(y~x))$r.squared
 
+datR2 <- data.frame()
+
 for (z in samples_list) {
-    if (!exists("GoF_temp")){
-      GoF_temp <- c()
-      datR2 <- data.frame()
-      }
-    if (exists("GoF_temp")){ 
-    dat <- c()
     GoF_temp <- filter(dat_GoF, Sample==z)
-    dat$Sample = factor(z)
+    dat <- data.frame(Sample = z)
     r_squared <- rsq(GoF_temp$Acdom, GoF_temp$fit)
     dat$r_squared <- r_squared
     datR2 <- rbind(datR2, dat)
     }
-}
 
 #rm(dat)
 #rm(GoF_temp)
 #rm(r_squared)
 
 #print datR2
-#datasaveR2 <- paste("outputs/data/",(gsub(pwd,"",wd)),"_GoF",".csv", sep="")
+#datasaveR2 <- paste(datapath,(gsub(pwd,"",wd)),"_GoF",".csv", sep="")
 #write.csv(datR2,file=datasaveR2,row.names=F)
 }
+
+write_log("Checkpoint 13: Rsquared calculated")
 
 ##calculate CDOM_443 from modeled data
 
@@ -565,14 +593,14 @@ CDOM_conv3$wavelength_nm <- CDOM_conv3$deltaLambda + 350
   names(datR2)
   #print CDOM_443
   model_443 <- model_443 |> full_join(datR2)
-  datasavemodel443 <- paste("outputs/data/",(gsub(pwd,"",wd)),"_model443_drift_corr",".csv", sep="")
+  datasavemodel443 <- paste(datapath,(gsub(pwd,"",wd)),"_model443_drift_corr",".csv", sep="")
   write.csv(model_443,file=datasavemodel443,row.names=F)
 }
+
+write_log("Checkpoint 14: model_443 and Rsquared saved")
   
   # =====================================================
 
-  message("Completed batch: ", basename(batch_dir))
-  
   write_log(
   paste(
     "Completed batch:",
@@ -597,21 +625,20 @@ safe_process_batch <- function(batch_dir){
 
     error = function(e){
 
-      message("")
-      message("***** FAILED *****")
-      message("Batch: ", basename(batch_dir))
-      message("Reason: ", e$message)
-      message("******************")
-
-      write_log(
+     write_log(
         paste(
           "FAILED:",
-          basename(batch_dir),
-          "-",
-          e$message
+          basename(batch_dir)
         )
       )
 
+      write_log(
+        paste(
+          "FULL ERROR:",
+          conditionMessage(e)
+        )
+      )
+      
       FALSE
 
     }
@@ -619,13 +646,10 @@ safe_process_batch <- function(batch_dir){
   )
 
 }
-      
 
-```
-
-
-#write logging function
-```{r, include=FALSE}
+# =====================================================
+# Logging function
+# =====================================================
 
 write_log <- function(message_text){
 
@@ -650,7 +674,11 @@ write_log <- function(message_text){
     append = TRUE
   )
 }
+
+      
+
 ```
+
 
 
 #apply the functions and log progress
@@ -670,11 +698,6 @@ log_file <- file.path(
     ".txt"
   )
 )
-
-
-message("")
-message("Root directory:")
-message(root_dir)
 
 write_log(
   paste(
@@ -701,9 +724,6 @@ batch_dirs <- list.dirs(
 #      )) > 0
 #  )
 #]
-
-message("")
-message("Found ", length(batch_dirs), " batch directories")
 
 write_log(
   paste(
@@ -737,14 +757,6 @@ results <- lapply(
 
 successes <- sum(unlist(results))
 failures <- length(results) - successes
-
-message("")
-message("======================================")
-message("PROCESSING COMPLETE")
-message("======================================")
-message("Successful batches: ", successes)
-message("Failed batches: ", failures)
-message("======================================")
 
 write_log("--------------------------------")
 write_log("PROCESSING COMPLETE")
