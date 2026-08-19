@@ -15,12 +15,11 @@ update 06/07/21 (Alex Macadam)
 update 31/05/2023 ?
 update 12/06/2025 import to github MMP-CDOM repo
 update: 17/06/2025 moved this script to github repo MMP-CDOM/main and renamed to remove now redundant version control (no longer required with move to github).
-update: 17/06/2025 reformatted to .Rmd 
+update: 19/08/2026 reformatted to .Rmd and improved utility by adding automatic generation of filenames including season and stn_fam details
 
 Combine model_443 and Rsquared outputs from each batch into a single dataframe and save as a .csv file
 Note that R does not like '\' so you will need to replace all the '\' in the filepath with '/'
-Note that the script collates data from any file with "model443_drift_corr" in the filename, from all subdirectories. If there are any precious processing batches in 
-Sub-directories make sure these are hidden by zipping
+Note that the script collates data from any file with "model443_drift_corr" in the filename, from all "output" subdirectories. If there are any precious processing batches in Sub-directories make sure these are hidden by zipping or output folder that are not to be used in the ingest are relabelled "outputs_archive", "outputs_superceded", "old_outputs" or similar 
 
 
 # setup packages
@@ -28,6 +27,7 @@ Sub-directories make sure these are hidden by zipping
 rm(list=ls())
 
 library(tidyverse)
+library(plyr)
 
 ```
 
@@ -44,12 +44,18 @@ Collate and print the model_443 Acdom values and the Rsquared values for all sam
 ```{r, include=FALSE}
 
 # create list of all files in the wd with model443 and Rsquared data fields
-file_list <- list.files(pattern="model443_drift_corr.csv", full.names=FALSE, recursive = TRUE) # recursive = TRUE allows list.files function to look in all subdirectories 
+file_list <- list.files(pattern="model443_drift_corr\\.csv$", full.names=TRUE, recursive = TRUE) # recursive = TRUE allows list.files function to look in all subdirectories 
 file_list #check that the listed files matches your expectations!
+
+# Keep only files in an ".../outputs/" directory. ignore any directories with other annotation or suffixes (i.e._superceded, _archive etc)
+file_list <- file_list[grepl("(^|[/\\\\])outputs[/\\\\].*model443_drift_corr\\.csv$", file_list)]
+file_list
+
+
 ## import all the model443 .CSVs in the wd to a single dataframe
 ## create a "Filename" column containing the file name associated with each row 
 
-# create a dataframe for the merged data
+# 1st create a dataframe for the merged data
 CDOM_443_all <- data.frame()
 
 # now loop to append all the data from the different csv files to this dataframe
@@ -70,12 +76,17 @@ View(CDOM_443_all)
 
 # if there are non-target samples from some of the analytical batches then remove them.
 wd #to confirm the target station family
-CDOM_443_all <- CDOM_443_all |> filter(str_detect(basename(wd)))
-View(CDOM_443_all)
+stn_fam <- basename(wd)
+season <- gsub(stn_fam,"",wd) |> basename()
+season <- gsub(" report","",season)
+
+CDOM_443_filter <- CDOM_443_all |> filter(str_detect(Sample, stn_fam))
+View(CDOM_443_filter)
 
 #print the data
 #path <- file.path(wd)
-write.csv(CDOM_443_all,file="2024-25_JCZ_CDOM443.csv",row.names=F)
+filename <- paste0("all_model443_", stn_fam,"_", season)
+write.csv(CDOM_443_filter,file=paste0(filename, ".csv"), row.names=F)
 
 ```
 
