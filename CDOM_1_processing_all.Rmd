@@ -145,35 +145,27 @@ CDOM_comp<-data.frame()
 
 # now append all the data from the different csv files to this dataframe
 for (x in file_path_list){
-  if (exists("CDOM_comp")){
     temp_dataset <-ldply(x, read.csv, header=FALSE, skip=39, sep=',',col.names=c('Wavelength_nm','Absorbance'))
     temp_dataset$Filename = factor(basename(x)) 
     CDOM_comp <- rbind(CDOM_comp, temp_dataset)
     rm(temp_dataset)
   }
-  
-}
 
 write_log("Checkpoint 2: CDOM_comp created")
 
 ## create a second data frame that shows the date/time stamp for analysis of each sample
 
+# create a dataframe for the merged data
+Analysis_times<-data.frame()
+
+# now append all the data from the different csv files to this dataframe
 for (x in file_path_list){
-  # create a dataframe for the merged data
-  if (!exists("Analysis_times")){
-    Analysis_times<-data.frame()
-  }
-  
-  # now append all the data from the different csv files to this dataframe
-  if (exists("Analysis_times")){
     temp_dataset <-ldply(x, read.csv, header=FALSE, skip=8, nrows=1, sep=',',col.names=c('title','Analysis_time','Filename'))
     temp_dataset$title <- NULL
     temp_dataset$Filename = factor(basename(x))
     Analysis_times <- rbind(Analysis_times, temp_dataset)
     rm(temp_dataset)
   }
-  
-}
 
 write_log("Checkpoint 3: Analysis_times created")
 
@@ -188,13 +180,11 @@ rm(Analysis_times)
 write_log("Checkpoint 4: CDOM_data merged")
 
 
-## write a list of sample names based on the file names but without the "_RawData.csv" suffix
-Sample <- gsub("_RawData.csv","",CDOM_data$Filename)
-
+## create sample names based on the file names but without the "_RawData.csv" suffix
 ## substitute "Filename" with "Sample" 
-CDOM_data$Sample <- Sample
+CDOM_data$Sample <- gsub("_RawData.csv","",CDOM_data$Filename)
 CDOM_data$Filename <- NULL
-rm(Sample)
+
 ## Create a "batch" column containing the processing date for this batch of samples
 Batch_info <- read.csv(file_path_list[1]) 
 Batch_dt <- Batch_info[8,]
@@ -247,14 +237,20 @@ driftplot <- ggplot(CDOM_blanks, aes(x = Wavelength_nm, y = Absorbance, group = 
   scale_y_continuous(minor_breaks = NULL, breaks=seq(-0.02,0.02,0.01),limits=c(-0.02,0.02)) +
   scale_x_continuous(minor_breaks = NULL, breaks=seq(250,750,50), limits=c(250,750)) +
   theme_gray() 
-driftplot
+#driftplot
 }
 
 #save a copy of the driftplot as a .jpg
-{plotpath <- file.path(wd,"outputs","plots")
+{plotpath <- file.path(wd,"outputs","plots","/")
 batch <- levels(as.factor(CDOM_data$Batch))
 plotfilename <- paste(batch,"_driftplot", ".jpg",sep = "")
-ggsave(plotfilename, path=plotpath)
+#ggsave(plotfilename, path=plotpath)
+ggsave(filename = file.path(plotpath, plotfilename),
+      width = 10,
+      height = 6,
+      dpi = 300)
+rm(driftplot)
+gc() #garbage collection to free up memory
 }
 
 write_log("Checkpoint 5: driftplot created")
@@ -284,7 +280,8 @@ blanks_250$proportion <- blanks_250$absdelta/blanks_250$samplemean
 rm(mean_250)
 #print blanks_250
 datapath <- file.path(wd,"outputs","data")
-datasaveblanks250 <- paste(datapath,(gsub(pwd,"",wd)),"_blanks_250",".csv", sep="")
+#datasaveblanks250 <- paste(datapath,(gsub(pwd,"",wd)),"_blanks_250",".csv", sep="")
+datasaveblanks250 <- file.path(datapath, paste0(basename(wd),"_blanks_250.csv"))
 write_log(paste("Confirm data write path: datapath =", datapath))
 write_log(paste("Confirm path and filename for 1st data file: datasaveblanks250 =", datasaveblanks250))
 write.csv(blanks_250,file=datasaveblanks250,row.names=F)
@@ -378,15 +375,21 @@ write_log("Checkpoint 7: drift correction applied")
     scale_y_continuous(minor_breaks = NULL, breaks=seq(-0.02,0.02,0.01),limits=c(-0.02,0.02)) +
     scale_x_continuous(minor_breaks = NULL, breaks=seq(250,750,50), limits=c(250,750)) +
     theme_gray() 
-  driftplot_corr
+  #driftplot_corr
 }
 
 #save a copy of the driftplot as a .jpg
 {
-  plotpath <- file.path(wd,"outputs","plots")
+  plotpath <- file.path(wd,"outputs","plots","/")
     batch <- levels(as.factor(CDOM_data$Batch))
     plotfilename <- paste(batch,"_driftplot_corr", ".jpg",sep = "")
-    ggsave(plotfilename, path=plotpath)
+    #ggsave(plotfilename, path=plotpath)
+    ggsave(filename = file.path(plotpath, plotfilename),
+          width = 10,
+          height = 6,
+          dpi = 300)
+    rm(driftplot_corr)
+    gc() #garbage collection to free up memory
   } 
 
 write_log("Checkpoint 8: driftplot_corr created")
@@ -400,8 +403,10 @@ dat <- NULL
 rm(dat)}
 
 ## write matrix data table to file
-datasave <- paste(datapath,(gsub(pwd,"",wd)),"_raw",".csv", sep="")
-write.csv(CDOM_matrix,file=datasave,row.names=F)
+#datasaveraw <- paste(datapath,(gsub(pwd,"",wd)),"_raw",".csv", sep="")
+datasaveraw <- file.path(datapath, paste0(basename(wd),"_raw.csv"))
+
+write.csv(CDOM_matrix,file=datasaveraw,row.names=F)
 
 write_log("Checkpoint 9: raw absorbance data saved")
 
@@ -423,8 +428,9 @@ correctiondat_wide$drift_base <- NULL
 names(correctiondat_wide)
 correctiondat_wide <- spread(correctiondat_wide, key = Sample, value = Abs_corr)
 ## write matrix data table to file
-datasave <- paste(datapath,(gsub(pwd,"",wd)),"_raw_drift_corr",".csv", sep="")
-write.csv(correctiondat_wide,file=datasave,row.names=F)
+#datasavedriftcorr <- paste(datapath,(gsub(pwd,"",wd)),"_raw_drift_corr",".csv", sep="")
+datasavedriftcorr <- file.path(datapath, paste0(basename(wd),"_raw_drift_corr.csv"))
+write.csv(correctiondat_wide,file=datasavedriftcorr,row.names=F)
 } 
 
 write_log("Checkpoint 10: drift corrected absorbance data saved")
@@ -440,13 +446,11 @@ write_log("Checkpoint 10: drift corrected absorbance data saved")
   
 rsq <- function(x, y) summary(lm(y~x))$r.squared
 
+# create dataframes for the output data data
+CDOM_conv <- data.frame()
+CDOM_conv2 <- data.frame()
+CDOM_conv3 <- data.frame()
   for (f in samples_list) {
-    if (!exists("CDOM_conv")){
-      CDOM_conv <- data.frame()
-      CDOM_conv2 <- data.frame()
-      CDOM_conv3 <- data.frame()
-    }
-    if (exists("CDOM_conv")){ 
       dat <- correctiondat2[Sample == f, Abs_corr, by=Wavelength_nm]
       dat$Sample  <-  factor(f)
       
@@ -455,6 +459,7 @@ rsq <- function(x, y) summary(lm(y~x))$r.squared
       #dat2$Sample  <-  factor(f)
       MeanAbs600_750 <- mean(subset(dat, Wavelength_nm >=600 & Wavelength_nm <=750)$Abs_corr, na.rm=TRUE)
       dat2$MeanAbs600_750_corr <- MeanAbs600_750
+      
       dat$Acdom  <-  23.03 * (dat$Abs_corr - MeanAbs600_750)
       
       Acdom350 <-  dat$Acdom[dat$Wavelength_nm==350]
@@ -490,16 +495,22 @@ rsq <- function(x, y) summary(lm(y~x))$r.squared
       GoF_temp$Acdom = data1$Acdom
       r_squared <- rsq(GoF_temp$Acdom, GoF_temp$fit)
       
-      plotpath <- file.path(wd,"outputs","plots")
-      plotfilename <- paste(dat2$Sample,"_drift_corr",".jpg",sep = "")
-      print(ggplot(dat, aes(y=Acdom, x=Wavelength_nm)) + geom_line()+
+      plotpath <- file.path(wd,"outputs","plots","/")
+      plotfilename <- paste(dat2$Sample,"_Acdom_drift_corr.jpg",sep = "")
+      Acdomplot <- (ggplot(dat, aes(y=Acdom, x=Wavelength_nm)) + geom_line()+
               geom_line(data=newdata, aes(y=fit, x=wavelength_nm), color='red')+
               #geom_point(data=newdata, aes(y=resid, x=wavelength_nm), color='blue', size=0.1)+
               #ggtitle(paste(dat2$Sample,': S=', sprintf("%.4f",dat2$S), ', ', 'R^2=', sprintf("%.4f",r_squared), ', ', 'K=', sprintf("%.3f",dat2$K)))+
               ggtitle(paste(dat2$Sample,': S=',dat2$S, ', ', 'R^2=', r_squared))+
               scale_y_continuous(expression(A[cdom]))+
               scale_x_continuous(expression(Wavelength (nm))))
-      ggsave(plotfilename, path=plotpath)
+      #ggsave(plotfilename, plot = Acdomplot, path=plotpath)
+      ggsave(filename = file.path(plotpath, plotfilename),
+            width = 10,
+            height = 6,
+            dpi = 300)
+      rm(Acdomplot)
+      gc()
       
       CDOM_conv <- rbind(CDOM_conv, dat) 
       dat2 <- as.data.frame(dat2,row.names=seq())
@@ -520,14 +531,15 @@ rsq <- function(x, y) summary(lm(y~x))$r.squared
       rm(r_squared)
       rm(data1)
     }
-  }
   
 write_log("Checkpoint 11: Acdom calculated, model fitted and plots created")
 
 ## create an object containing the new directory and name of compiled data to be saved
 {
-    datasave2 <- paste(datapath,(gsub(pwd,"",wd)),"_factors_drift_corr",".csv", sep="")
-    datasave4 <- paste(datapath,(gsub(pwd,"",wd)),"_Acdom_drift_corr",".csv", sep="")
+    #datasave2 <- paste(datapath,(gsub(pwd,"",wd)),"_factors_drift_corr",".csv", sep="")
+    datasave2 <- file.path(datapath, paste0(basename(wd),"_factors_drift_corr.csv"))
+    #datasave4 <- paste(datapath,(gsub(pwd,"",wd)),"_Acdom_drift_corr",".csv", sep="")
+    datasave4 <- file.path(datapath, paste0(basename(wd),"_Acdom_drift_corr.csv"))
     
     ## write data table to file
     write.csv(CDOM_conv2,file=datasave2, row.names=F)
@@ -558,8 +570,9 @@ dat_GoF <- dat_GoF[c("Sample", "wavelength_nm", "Acdom", "fit")]
 temp <- NULL
 rsq <- function(x, y) summary(lm(y~x))$r.squared
 
+# create a dataframe for the merged data
 datR2 <- data.frame()
-
+# and append the data to this dataframe
 for (z in samples_list) {
     GoF_temp <- filter(dat_GoF, Sample==z)
     dat <- data.frame(Sample = z)
@@ -593,7 +606,9 @@ CDOM_conv3$wavelength_nm <- CDOM_conv3$deltaLambda + 350
   names(datR2)
   #print CDOM_443
   model_443 <- model_443 |> full_join(datR2)
-  datasavemodel443 <- paste(datapath,(gsub(pwd,"",wd)),"_model443_drift_corr",".csv", sep="")
+  #datasavemodel443 <- paste(datapath,(gsub(pwd,"",wd)),"_model443_drift_corr",".csv", sep="")
+  datasavemodel443 <- file.path(datapath, paste0(basename(wd),"_model443_drift_corr.csv"))
+  
   write.csv(model_443,file=datasavemodel443,row.names=F)
 }
 
