@@ -27,15 +27,15 @@ Run this script first
 User must: 
 : IN WINDOWS EXPLORER
 : -pull latest version of the code from github repo MMP-CDOM/main. See Daniel Moran for help with this if you need assistance accessing the repo
-: -copy script to the working directory and add batch information to the script filename eg. "CDOM_1_processing_b20241218_FTZ400-412.Rmd"
-: -create "extra" folder in the working directory and move run notes, a backup of the raw data and any additional files to this folder.
+: -copy script to the working directory for the family of stations (eg.: .../CDOM/2025-26 report/WQR) and add processing information to the script filename eg. "CDOM_1_processing_all_WQR_2026.Rmd"
+: - review runsheets for every batch and tidy each subdirectory so it has one file for each sample and blank scan. if changing filenames you also need to change the header information (must keep as a .csv so open in notepad or similar to edit header) and log all changes or adjustment sin the runsheet or a read-me file
+: -create "extra" folder in the working directory for each batch and move run notes, any additional files or archived versions of original files to this folder.
 : IN the R SCRIPT FOR THIS BATCH
 : -reset R session (windows CTRL+SHIFT+F10)
-: -change the wd
-: -change the file string information in "pwd" used for generating filenames to reflect the actual parent folder for the wd. (update to pwd generally only will need to be done for each years' processing if you are not moving the data.)
+: -make sure the script is running from the correct direcotry (see above) important for the script to find and run all batch folders
 N.B.
 data files should only include files that have been auto-exported from the Shimadzu UV-1900 UV-Vis spec.
-R for windows does not like '\' so you will need to replace all the '\' in the filepath with '/'
+R for windows does not like '\' so only use '/'
 
 
 ---
