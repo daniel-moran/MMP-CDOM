@@ -60,7 +60,7 @@ CDOM_443_all <- data.frame()
 
 # now loop to append all the data from the different csv files to this dataframe
 for (x in file_list){
-    temp_dataset <-ldply(x, read.csv, header=TRUE, skip=0, sep=',',col.names=c('Sample','model_443','r_squared'))
+    temp_dataset <-ldply(x, read.csv, header=TRUE, skip=0, sep=',',col.names=c('Sample','model_443','r_squared', 'Acdom443'))
     CDOM_443_all <- rbind(CDOM_443_all, temp_dataset)
     rm(temp_dataset)
   }
@@ -71,6 +71,7 @@ sapply(CDOM_443_all, class)
 CDOM_443_all$model_443 <- as.numeric(CDOM_443_all$model_443)
 CDOM_443_all$Sample <- as.character(CDOM_443_all$Sample)
 CDOM_443_all$r_squared <- as.numeric(CDOM_443_all$r_squared)
+CDOM_443_all$model_443 <- as.numeric(CDOM_443_all$Acdom443)
 CDOM_443_all <- CDOM_443_all[order(CDOM_443_all$Sample),]
 View(CDOM_443_all)
 
