@@ -565,6 +565,12 @@ CDOM_conv3$wavelength_nm <- CDOM_conv3$deltaLambda + 350
   names(datR2)
   #print CDOM_443
   model_443 <- model_443 |> full_join(datR2)
+  model_443 <- model_443 |> full_join(CDOM_conv2)
+  names(model_443)
+  model_443$MeanAbs600_750_corr <- NULL
+  model_443$Acdom350 <- NULL
+  model_443$S <- NULL
+  names(model_443)
   datasavemodel443 <- paste("outputs/data/",(gsub(pwd,"",wd)),"_model443_drift_corr",".csv", sep="")
   write.csv(model_443,file=datasavemodel443,row.names=F)
 }
