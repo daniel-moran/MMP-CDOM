@@ -20,7 +20,7 @@ update: 20/07/2026 adjustments for 2025-26 JCU lab data.
 update: 12/08/2026: due to a mistake in the script the model was not previously being fitted over narrower range 350-680nm (it was only being plotted over that range). I have now improved model fit by adjusting to fit the model over range 380-680nm. This has narrowed the range and also avoids instrument noise from lamp changeover (worst between 340-380nm - noise created by the end range of the tungsten (visible) lamp before the change to deuterium (UV) lamp at 340nm). Have also improved fit by refining the starting value for S during model fitting (was start=list(S=1), now start=list(S=0.015)) since the model was falling over over the reduced range du to high starting value for S. I also tried adding K factor to model (K accounts for residual scattering or baseline offsets), although this appears to provide a slight improvement to R2 the model without K provides a better representation of Acdom(443) (based on examinations using test data from batch CDOM-20251210_CYA001-005_&_CYA037-041_&_CYA049-050) so I have continued to model without K. (noting that inner filter corrections are already applied by subtracting mean absorbance 600-750 nm during conversion to Acdom)
                     - variance in modelled Acdom(443) from observed using model without K: mean = 0.00001, stdev = 0.003955274
                     - variance in modelled Acdom(443) from observed using model with K: mean = -0.001328288, stdev = 0.003211442
-      NOTE I HAVE NOT TESTED THE REDUCED MODEL FITTING RANGE YET THIS NEEDS TO BE DEBUGGED BEOFRE NEXT TIME WE RECIEVE OR PROCESS DATA
+update: 20/08/2026: debugging and improvement to the JCU lab processing script for the 2026 update to improved model fitting and script overhaul (prior to re-run of all processing of the event data)
 
 This script is confirmed to be compatible with R version 4.3.1 and Rstudio version 2025.05.1+513
 Combine multiple .csv files from a batch of UV-Vis spec outputs into a single data table and convert to absorption coefficients
@@ -44,48 +44,102 @@ R:\Lagoon_WQ\results\CDOM\2025-26 report\JCE\J26-0029 #location on RWQPP
 
 ---
 
+# setup packages
+```{r, include=FALSE}
+rm(list=ls())
+
+#library(dplyr)
+#library(data.table)
+#library(tidyr)
+#library(ggplot2)
+#library(plyr)
+#library(zoo)
+library(tidyverse)
+library(readxl) #for reading in excel files (output from JCU lab)
+library(data.table)
+
+```
+
+
 ## Set the working directory
 ###MUST change '\' to '/' in path
 ```{r, include=FALSE}
-rm(list=ls())
-setwd("R:/Lagoon_WQ/results/CDOM/2025-26 report/JCE/J26-0029")
-wd <- getwd()
-pwd<- "R:/Lagoon_WQ/results/CDOM/2025-26 report/JCE"
+
+#knitr::opts_knit$set(root.dir = "R:/Lagoon_WQ/results/CDOM/2025-26 report/WQR/CDOM-20251015_WQR331-347")
+wd <- getwd() #relies on the default working directory based on the location of the script. so users MUST copy the script to the folder where the raw scans are located so this becomes the wd for the batch that is processing.
+pwd<- dirname(getwd()) #used for creating file paths and other functions in this script
+
+#setwd("R:/Lagoon_WQ/results/CDOM/2025-26 report/JCE/J26-0029")
+#wd <- getwd()
+#pwd<- "R:/Lagoon_WQ/results/CDOM/2025-26 report/JCE"
 ```
 
 
 ## Create some folders in the wd for saving outputs
 ```{r, include= FALSE}
-{dir.create(file.path(wd,"outputs"))
-dir.create(file.path(wd,"outputs","plots"))
-dir.create(file.path(wd,"outputs","data"))
+getwd()
+
+{dir.create(file.path(wd,"outputs"),
+           showWarnings = FALSE)
+dir.create(file.path(wd,"outputs","plots"),
+           recursive = TRUE,
+           showWarnings = FALSE)
+dir.create(file.path(wd,"outputs","data"),
+           recursive = TRUE,
+           showWarnings = FALSE)
 }
+
+#{dir.create(file.path(wd,"outputs"))
+#dir.create(file.path(wd,"outputs","plots"))
+#dir.create(file.path(wd,"outputs","data"))
+#}
 ```
 
 ## create lists of all files in the wd
 ```{r, include= FALSE}
-library(rlist)
-{file_list <- list.files(wd, pattern=".xl", full.names=TRUE)
+#library(rlist)
+{file_list <- list.files(wd, pattern="\\.xl", full.names=TRUE)
 }
 ```
 
 
-## Import the data from CSV. 
-```{r, include= FLASE}
+## Import the data from excel files 
+```{r, include= FALSE}
 #be aware that this step/chunk will likely require some manual handling if there are typos or slight changes to formatting coming from the JCU lab
 
-library(tidyverse)
-library(readxl) #for reading in excel files (output from salinometer)
-library(janitor)
+#library(tidyverse)
+#library(readxl) #for reading in excel files (output from salinometer)
+#library(janitor)
 
 CDOM_comp <- read_excel(file_list[2], sheet = 2, col_names = TRUE) #for excel files - we most likey will receive .xls or .xlsx rather than csv
 #CDOM_comp <- read.csv(file_list[1], header =  TRUE) #for csv files
+
 names(CDOM_comp)
+
+# Find all columns that look like any variation of Milli-Q
+milliq_cols <- names(CDOM_comp)[str_detect(
+  names(CDOM_comp),
+  regex("milli[[:space:]_-]*q", ignore_case = TRUE))
+  ]
+
+# Rename first and last Milli-Q columns
+if (length(milliq_cols) >= 2) {
+  CDOM_comp <- CDOM_comp  |> 
+    dplyr::rename(
+      MilliQ_start = all_of(milliq_cols[1]),
+      MilliQ_end   = all_of(milliq_cols[length(milliq_cols)])
+    )
+} else {
+  warning("Could not identify at least two Milli-Q columns")
+}
+
+names(CDOM_comp)
+
+#rename wavelength column
 CDOM_comp <- dplyr::rename(CDOM_comp, 'Wavelength_nm' = 'Wavelength nm.')
-CDOM_comp <- dplyr::rename(CDOM_comp, 'MilliQ_start' = 'Milli-Q...2')
-CDOM_comp <- dplyr::rename(CDOM_comp, 'MilliQ_end' = 'Milli-Q...7')
-#CDOM_comp <- janitor::clean_names(CDOM_comp)
+
 names(CDOM_comp)
+
 
 metaheaders <- read_excel(file_list[1], n_max = 1, col_names =  TRUE) #check the deaders they are often across 2 lines from JCU LIMS output
 #metaheaders <- metaheaders |> janitor::clean_names()
@@ -93,12 +147,13 @@ metaheaders <- names(metaheaders)
 #metaheaders <- read.csv(file_list[2], nrows = 2, header =  FALSE)
 #metaheaders = sapply(metaheaders, paste, collapse = "")
 metaheaders
+
 metadata <- read_excel(file_list[1], skip=2, col_names = metaheaders)
 metadata <- metadata %>% select(c(1:5))
 #metadata <- read.csv(file_list[2], skip=3, col.names = metaheaders, header = FALSE)
 #metadata <- rename(metadata, short_name = sample_description)
 names(metadata)
-metadata <- rename(metadata, station_name_depth = "Bottle ID for Sample Bottle")
+metadata <- dplyr::rename(metadata, station_name_depth = "Bottle ID for Sample Bottle")
 metadata$station_name_depth
 #str_sub(metadata$station_name_depth, 7, 6) <- "_" #add underscore between station and depth code if multiple peths are sampled
 #metadata$station_name_depth
@@ -114,12 +169,13 @@ metadata$Sample
 #metadata$Sample <- str_replace(metadata$Sample, c("-"), c("_"))
 metadata$Sample
 metadata <- distinct(metadata)
+
 metadata2 <- metadata %>% select(c(Sample, station_name_depth))
 
 
 ```
 
-```{r, include= FLASE}
+```{r, include= FALSE}
 #only use this chunk if you need to handle rescans or duplicate scans
 #add a row to metadata2 for the rescan of sample JCF442_D0 - including the rescan so the 2 scans can be assessed against each other
 
@@ -134,7 +190,7 @@ metadata2 <- metadata %>% select(c(Sample, station_name_depth))
 ### plot blank curves to look for drift - we are only plotting this to eyeball the control scans and ensure we are happy with the JCU output at a gross level - they only have start and end blank scans and the supplied data does not include timestamps or other analytical metadata so drift corrections are not practical
 
 ## 1st create a dataframe with milliQ blanks only
-```{r, include= FLASE}
+```{r, include= FALSE}
 
 list <- names(CDOM_comp)  
 batch <- str_remove(wd, pwd)
@@ -170,7 +226,7 @@ CDOM_long <- arrange(CDOM_long, Wavelength_nm)
 names(CDOM_long)
 CDOM_long <- filter(CDOM_long, Sample %in% samples_list)
 CDOM_long <- CDOM_long |>  select(Wavelength_nm, Absorbance, station_name_depth)
-CDOM_long <- rename(CDOM_long, Sample = station_name_depth)
+CDOM_long <- dplyr::rename(CDOM_long, Sample = station_name_depth)
 CDOM_long <- CDOM_long  |>  relocate(Sample)
 names(CDOM_long)
 typeof(CDOM_long$Absorbance)
@@ -183,8 +239,8 @@ samples_list <- levels(CDOM_long$Sample)
 ```
 
 ## plot the data in CDOM_blanks, organise by samples, to look for drift
-```{r, include= FLASE}
-{library(ggplot2)
+```{r, include= TRUE}
+{#library(ggplot2)
 driftplot <- ggplot(CDOM_blanks, aes(x = Wavelength_nm, y = Absorbance, colour = Sample)) + 
   geom_line(linewidth=0.1) +
   ylab('Absorbance') +
@@ -196,11 +252,17 @@ driftplot
 }
 
 #save a copy of the driftplot as a .jpg
-{plotpath <- file.path(wd,"outputs","plots")
-batch <- str_remove(wd, pwd)
-batch <- str_remove(batch, "/")
-plotfilename <- paste(batch,"_driftplot", ".jpg",sep = "")
-ggsave(plotfilename, path=plotpath)
+{
+plotpath <- file.path(wd,"outputs","plots")
+#batch <- str_remove(wd, pwd)
+#batch <- str_remove(batch, "/")
+batch <- basename(wd)
+plotfilename <- paste(batch,"_driftplot.jpg",sep = "")
+#ggsave(plotfilename, path=plotpath)
+ggsave(filename = file.path(plotpath, plotfilename),
+      width = 10,
+      height = 6,
+      dpi = 300)
 }
 
 
@@ -213,8 +275,10 @@ ggsave(plotfilename, path=plotpath)
 CDOM_matrix <- pivot_wider(CDOM_long, id_cols = Wavelength_nm, names_from = Sample, values_from = Absorbance)
 
 ## write matrix data table to file
-datasave <- paste(wd, "/outputs/data/", batch, "_raw", ".csv", sep="")
-write.csv(CDOM_matrix,file=datasave,row.names=F)
+#datasaveraw <- paste(wd, "/outputs/data/", batch, "_raw.csv", sep="")
+datapath <- file.path(wd,"outputs","data")
+datasaveraw <- file.path(datapath, paste0(batch,"_raw.csv"))
+write.csv(CDOM_matrix,file=datasaveraw,row.names=F)
 }
 
 ```
@@ -238,34 +302,32 @@ write.csv(CDOM_matrix,file=datasave,row.names=F)
 
 rsq <- function(x, y) summary(lm(y~x))$r.squared
 
+CDOM_conv <- list()
+CDOM_conv2 <- list()
+CDOM_conv3 <- list()
+
   for (f in samples_list) {
-    if (!exists("CDOM_conv")){
-      CDOM_conv <- list()
-      CDOM_conv2 <- list()
-      CDOM_conv3 <- list()
-    }
-    if (exists("CDOM_conv")){ 
-      dat <- list()
       dat <- filter(CDOM_long, Sample == f)
       dat$Sample  <-  factor(dat$Sample, levels = f)
-      dat2 <- list()
-      dat2$Sample  <-  factor(f)
+      dat2 <- data.frame(Sample = factor(f))
       MeanAbs600_750 <- mean(subset(dat, Wavelength_nm >=600 & Wavelength_nm <=750)$Absorbance, na.rm=TRUE)
       dat2$MeanAbs600_750_raw <- MeanAbs600_750
+      
       dat$Acdom  <-  23.03 * (dat$Absorbance - MeanAbs600_750)
       
-      Abs350  <-  dat$Acdom[dat$Wavelength_nm==350]
-      dat2$Abs350  <-  Abs350
+      Acdom350  <-  dat$Acdom[dat$Wavelength_nm==350]
+      dat$Acdom350  <-  Acdom350
+      dat2$Acdom350  <-  Acdom350
       deltaLambda  <-  dat$Wavelength_nm - dat$Wavelength_nm[dat$Wavelength_nm==350]
       dat$deltaLambda <- deltaLambda
-      Abs443  <-  dat$Acdom[dat$Wavelength_nm==443]
-      dat2$Abs443  <-  Abs443
+      Acdom443  <-  dat$Acdom[dat$Wavelength_nm==443]
+      dat2$Acdom443  <-  Acdom443
       modeldat <- dat |> filter(Wavelength_nm >= 380, Wavelength_nm <= 680) #objective of model fitting is to represent absorbance of the visible spectra and generate fitted Acdom(443) so am reducing the fitting range to 380-680nm. this avoids noisier segment off the spectrum between 340-380 due to instrument artefacts (lamp changover). note the reference wavelength is stil 350nm
       
-      #dat.nls <- nls(Acdom ~ Abs350*exp(-S*deltaLambda) + K,
+      #dat.nls <- nls(Acdom ~ Acdom350*exp(-S*deltaLambda) + K,
       #               data=modeldat, start=list(S=0.015, K = 0), control=nls.control(maxiter=1000)) 
       
-      dat.nls <- nls(Acdom ~ Abs350*exp(-S*deltaLambda),
+      dat.nls <- nls(Acdom ~ Acdom350*exp(-S*deltaLambda),
                      data=modeldat, start=list(S=0.015), control=nls.control(maxiter=1000)) #using model without K. inner filter effects are accounted for in the conversion to Acdom already and the model without K seemed to provide a better representation of Acdom(443)
       
       summary(dat.nls)
@@ -294,12 +356,17 @@ rsq <- function(x, y) summary(lm(y~x))$r.squared
               ggtitle(paste(dat2$Sample,': S=',dat2$S, ', ', 'R^2=', r_squared))+
               scale_y_continuous(expression(A[cdom]))+
               scale_x_continuous(expression(Wavelength (nm))))
-      ggsave(plotfilename, path=plotpath)
+      #ggsave(plotfilename, path=plotpath)
+      ggsave(filename = file.path(plotpath, plotfilename),
+            width = 10,
+            height = 6,
+            dpi = 300)
       
       CDOM_conv <- rbind(CDOM_conv, dat) 
       dat2 <- as.data.frame(dat2,row.names=seq())
       CDOM_conv2 <- rbind(CDOM_conv2, dat2) 
       CDOM_conv3 <- rbind(CDOM_conv3, newdata) 
+      
       rm(dat)
       rm(dat2)
       rm(newdata)
@@ -308,14 +375,13 @@ rsq <- function(x, y) summary(lm(y~x))$r.squared
       rm(fit)
       rm(xs)
       rm(MeanAbs600_750)
-      rm(Abs350)
+      rm(Acdom350)
       rm(deltaLambda)
-      rm(Abs443)
+      rm(Acdom443)
       rm(GoF_temp)
       rm(r_squared)
       rm(data1)
     }
-  }
   
 ```  
 
@@ -323,8 +389,8 @@ rsq <- function(x, y) summary(lm(y~x))$r.squared
 ## create an object containing the new directory and name of compiled data to be saved
 ```{r, include= FLASE}
   {
-    datasave2 <- paste(wd, "/outputs/data/", batch, "_factors",".csv", sep="")
-    datasave4 <- paste(wd, "/outputs/data/", batch, "_Acdom",".csv", sep="")
+    datasave2 <- file.path(datapath, paste0(batch, "_factors.csv"))
+    datasave4 <- file.path(datapath, paste0(batch, "_Acdom.csv"))
     
     ## write data table to file
     write.csv(CDOM_conv2,file=datasave2, row.names=F)
@@ -335,7 +401,7 @@ rsq <- function(x, y) summary(lm(y~x))$r.squared
     CDOM_conv4$Abs_corr <- NULL
     
     ## create a matrix for CDOM_conv data (i.e. convert to 'wide' format)
-    library(tidyr)
+    #library(tidyr)
     ACDOM_matrix <- pivot_wider(CDOM_conv4, id_cols = Wavelength_nm, names_from = Sample, values_from = Acdom)
     ## write matrix data to file
     write.csv(ACDOM_matrix,file=datasave4, row.names=F) 
@@ -353,20 +419,17 @@ dat_GoF <- dat_GoF[c("Sample", "wavelength_nm", "Acdom", "fit")]
 temp <- NULL
 rsq <- function(x, y) summary(lm(y~x))$r.squared
 
+# create a dataframe for the merged data
+datR2 <- data.frame()
+# and append the data to this dataframe
 for (z in samples_list) {
-    if (!exists("GoF_temp")){
-      GoF_temp <- c()
-      datR2 <- data.frame()
-      }
-    if (exists("GoF_temp")){ 
-    dat <- c()
     GoF_temp <- filter(dat_GoF, Sample==z)
-    dat$Sample = factor(z)
+    dat <- data.frame(Sample = z)
     r_squared <- rsq(GoF_temp$Acdom, GoF_temp$fit)
     dat$r_squared <- r_squared
     datR2 <- rbind(datR2, dat)
     }
-}
+
 
 #rm(dat)
 #rm(GoF_temp)
@@ -379,7 +442,7 @@ for (z in samples_list) {
 
 ##calculate CDOM_443 from modeled data
 ```{r, include= FLASE}
-library(data.table)
+#library(data.table)
 CDOM_conv3$wavelength_nm <- CDOM_conv3$deltaLambda + 350
 {
   model_443 <- filter(CDOM_conv3, wavelength_nm == 443.0)
@@ -388,14 +451,20 @@ CDOM_conv3$wavelength_nm <- CDOM_conv3$deltaLambda + 350
   model_443$wavelength_nm <- NULL
   model_443$fit <- NULL
   model_443$deltaLambda <- NULL
-  names(datR2)
   names(model_443)
-  is.data.table(model_443)
-  #setnames(model_443, "Sample", "sample") #change the column name in baseline from "Sample" to "sample"
+  names(datR2)
   #print CDOM_443
-  model_443<- cbind(model_443, datR2$r_squared)
-  colnames(model_443)<- c("Sample", "model_443","r_squared")
-  datasavemodel443 <- paste(wd, "/outputs/data/", batch, "_model443",".csv", sep="")
+  model_443 <- model_443 |> full_join(datR2)
+  model_443 <- model_443 |> full_join(CDOM_conv2)
+  names(model_443)
+  model_443$MeanAbs600_750_raw <- NULL
+  model_443$Acdom350 <- NULL
+  model_443$S <- NULL
+  names(model_443)
+  #datasavemodel443 <- paste(wd, "/outputs/data/", batch, "_model443",".csv", sep="")
+  datasavemodel443 <- file.path(datapath, paste0(batch,"_model443.csv"))
+  
   write.csv(model_443,file=datasavemodel443,row.names=F)
 }
+
 ```
