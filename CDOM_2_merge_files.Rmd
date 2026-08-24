@@ -86,7 +86,8 @@ View(CDOM_443_filter)
 
 #print the data
 #path <- file.path(wd)
-filename <- paste0("all_model443_", stn_fam,"_", season)
+#filename <- paste0("all_model443_", stn_fam,"_", season)
+filename <- paste0("CDOM_model443_", stn_fam,"_summary_", season)
 write.csv(CDOM_443_filter,file=paste0(filename, ".csv"), row.names=F)
 
 ```
