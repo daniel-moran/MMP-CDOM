@@ -19,6 +19,7 @@ update: 17/06/2025 moved this script to github repo MMP-CDOM/main and renamed to
 update: 12/08/2026: due to a mistake in the script the model was not previously being fitted over narrower range 350-680nm (it was only being plotted over that range). I have now improved model fit by adjusting to fit the model over range 380-680nm. This has narrowed the range and also avoids instrument noise from lamp changeover (worst between 340-380nm - noise created by the end range of the tungsten (visible) lamp before the change to deuterium (UV) lamp at 340nm). Have also improved fit by refining the starting value for S during model fitting (was start=list(S=1), now start=list(S=0.015)) since the model was falling over over the reduced range du to high starting value for S. I also tried adding K factor to model (K accounts for residual scattering or baseline offsets), although this appears to provide a slight improvement to R2 the model without K provides a better representation of Acdom(443) (based on examinations using test data from batch CDOM-20251210_CYA001-005_&_CYA037-041_&_CYA049-050) so I have continued to model without K. (noting that inner filter corrections are already applied by subtracting mean absorbance 600-750 nm during conversion to Acdom)
                     - variance in modelled Acdom(443) from observed using model without K: mean = 0.00001, stdev = 0.003955274
                     - variance in modelled Acdom(443) from observed using model with K: mean = -0.001328288, stdev = 0.003211442
+update: 23/09/2026 This script includes an extra chunck of code to reset the baseline for all the scans in this batch - the actual baseline was taken before the instrument had stabilised so the actual blanks and scans had drifted from the zero baseline - fortunalty the actual blanks and samples were scanned after the instrument had stabilised and the output data could be ~corrected to a zero baseline - using the initial blank as the baseline offset. Also see comments and records in the batch folder for further details
 
 This script is confirmed to be compatible with R version 4.3.1 and Rstudio version 2025.05.1+513
 Combine multiple .csv files from a batch of UV-Vis spec outputs into a single data table and convert to absorption coefficients
@@ -210,6 +211,64 @@ CDOM_blanks <- CDOM_blanks[order(CDOM_blanks$Analysis_time),]
 ## plot the data in CDOM_blanks, organise by samples, to look for drift
 ```{r, include= TRUE}
 {#library(ggplot2)
+driftplot <- ggplot(CDOM_blanks, aes(x = Wavelength_nm, y = Absorbance, group = Analysis_time, colour = Sample)) + 
+  geom_line(size=0.1) +
+  ylab('Absorbance') +
+  xlab('Wavelength_nm') +
+  scale_y_continuous(minor_breaks = NULL, breaks=seq(-0.02,0.02,0.01),limits=c(-0.2,0.2)) +
+  scale_x_continuous(minor_breaks = NULL, breaks=seq(250,750,50), limits=c(250,750)) +
+  theme_gray() 
+driftplot
+}
+
+#save a copy of the driftplot as a .jpg
+{plotpath <- file.path(wd,"outputs","plots")
+batch <- levels(as.factor(CDOM_data$Batch))
+plotfilename <- paste(batch,"_driftplot_initial", ".jpg",sep = "")
+ggsave(plotfilename, path=plotpath)
+}
+```
+
+### the baseline (on the spec) for this batch of scans was applied too early while the instrument was still warming up. however the start and end blanks were still saved properly and were scanned after the instrument had stabilised so they reflect the working baseline that the batch was scanned against, so we can use the existing "start" blank to correct all the raw absorbace values to a meaningful baseline
+
+##the following lines are applying this correction to reset the "baseline" - for this chunk of code the working baseline is the 1st blank scan "milliq_01_start"
+
+```{r}
+library(tidyr)
+library(data.table)
+# create a copy of CDOM_data
+  CDOM_baseline <- CDOM_data
+  is.data.table(CDOM_baseline)
+  CDOM_baseline <- data.table(CDOM_baseline)
+  is.data.table(CDOM_baseline)
+
+# make the initial blank the 'baseline value" for all scans
+  names(CDOM_baseline)
+  baseline <- CDOM_baseline[Sample == "milliq_01_start", Absorbance, by=Wavelength_nm] # make milliq_01_start the baseline
+  setnames(baseline, "Absorbance", "Abs_baseline") #change the column name in baseline from "Absorbance" to "Abs_baseline"
+  CDOM_baseline <- CDOM_baseline[baseline, on="Wavelength_nm", allow.cartesian=TRUE]
+  baseline <- NULL
+  rm(baseline)
+  names(CDOM_baseline)
+  
+  print(CDOM_baseline[, Abs_corr := Absorbance-Abs_baseline]) # corrected raw absorbance values calculated based on the absorbance minus the actual baseline 
+#  CDOM_baseline2 <- CDOM_baseline[Wavelength_nm >=250] # just data between 250-750nm
+#  CDOM_baseline <- CDOM_baseline[order(Analysis_time)]
+  CDOM_baseline <- CDOM_baseline[order(Analysis_time)]
+  CDOM_baseline <- as.data.table(CDOM_baseline)  
+  CDOM_baseline$Absorbance <- CDOM_baseline$Abs_corr #make the baseline corrected data into the Absorbance data
+  CDOM_baseline$Abs_baseline <- NULL #remove the Abs_baseline data
+  CDOM_baseline$Abs_corr <- NULL #remove the Abs_corr data
+  CDOM_data <- CDOM_baseline #setup the working dataframe with the re-baselined data
+  CDOM_blanks <- filter(CDOM_data, Sample %in% blanks_list) #setup the blank dataframe with the re-baselined data
+  CDOM_baseline <- NULL
+  rm(CDOM_baseline)
+  
+# the working dataframes are now setup with the correct baseline and the script can now continue as per the normal process
+
+## plot the data in CDOM_blanks again, organise by samples, to look for drift
+
+{library(ggplot2)
 driftplot <- ggplot(CDOM_blanks, aes(x = Wavelength_nm, y = Absorbance, group = Analysis_time, colour = Sample)) + 
   geom_line(size=0.1) +
   ylab('Absorbance') +
