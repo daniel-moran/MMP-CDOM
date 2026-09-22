@@ -548,6 +548,7 @@ write_log("Checkpoint 11: Acdom calculated, model fitted and plots created")
     CDOM_conv4 <- CDOM_conv
     CDOM_conv4$deltaLambda <- NULL
     CDOM_conv4$Abs_corr <- NULL
+    CDOM_conv4$Acdom350 <- NULL
     
     ## create a matrix for CDOM_conv data (i.e. convert to 'wide' format)
     #library(tidyr)
