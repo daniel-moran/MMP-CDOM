@@ -308,7 +308,8 @@ names(CDOM_data)
   dat_order$tdiff_hrs <- as.numeric(dat_order$tdiff_hrs, units="hours")
   dat_order$tdiff_hrs <- cumsum(dat_order$tdiff_hrs)
   names(dat_order)
-  print(dat_order[, time_blanks := tdiff_hrs]) 
+  #print(dat_order[, time_blanks := tdiff_hrs]) 
+  dat_order[, time_blanks := tdiff_hrs]
   dat_order$time_blanks[dat_order$Sample %in% samples_list] <- NA
   names(dat_order)
 # create a copy of CDOM_data
@@ -317,7 +318,8 @@ names(CDOM_data)
   CDOM_corr <- data.table(CDOM_corr)
   is.data.table(CDOM_corr)
 # copy Absorbance values to a new column called Abs_blanks - then keep only the absorbance data for blanks in this column
-  print(CDOM_corr[, Abs_blanks := Absorbance]) 
+  #print(CDOM_corr[, Abs_blanks := Absorbance]) 
+  CDOM_corr[, Abs_blanks := Absorbance]
   CDOM_corr$Abs_blanks[CDOM_corr$Sample %in% samples_list] <- NA
 # merge dat_order and CDOM_corr to a single data table
   correctiondat <- merge(dat_order, CDOM_corr, allow.cartesian=TRUE, all.x = TRUE, all.y = TRUE)
@@ -336,14 +338,18 @@ names(CDOM_data)
   #library(zoo)
   correctiondat$Abs_blanks_p <- na.locf(correctiondat$Abs_blanks, fromLast = FALSE) # this is a temp column holding the prev blank abs value (i.e. from the start of each lot of 10 samples), used in calculating the amount of drift to apply to each scan
   correctiondat$Abs_blanks_n <- na.locf(correctiondat$Abs_blanks, fromLast = TRUE) # this is a temp column holding the next blank abs values (i.e. from the end of each lot of 10 samples), used in calculating the amount of drift to apply to each scan
-  print(correctiondat[, Abs_delta := Abs_blanks_p-Abs_blanks_n]) # shows the difference between the prev blank and the next blank
+  #print(correctiondat[, Abs_delta := Abs_blanks_p-Abs_blanks_n]) # shows the difference between the prev blank and the next blank
+  correctiondat[, Abs_delta := Abs_blanks_p-Abs_blanks_n] # calculate the difference between the prev blank and the next blank
   #correctiondat$run_time <- dat_order[.N,3] # column holding the length of time taken to complete the full run of samples in the batch
   correctiondat$blank_time_p <- na.locf(correctiondat$time_blanks, fromLast = FALSE) #elapsed time when the prev blank scan was taken
   correctiondat$blank_time_n <- na.locf(correctiondat$time_blanks, fromLast = TRUE) #elapsed time when the next blank scan was taken
-  print(correctiondat[, drift := Abs_delta/(blank_time_n-blank_time_p)*(tdiff_hrs-blank_time_p)]) # shows the drift between the prev and next blank based on time elapsed since prev blank as a proportion of time elapsed to the next blank
+  #print(correctiondat[, drift := Abs_delta/(blank_time_n-blank_time_p)*(tdiff_hrs-blank_time_p)]) # shows the drift between the prev and next blank based on time elapsed since prev blank as a proportion of time elapsed to the next blank
+  correctiondat[, drift := Abs_delta/(blank_time_n-blank_time_p)*(tdiff_hrs-blank_time_p)] # calculate the drift between the prev and next blank based on time elapsed since prev blank as a proportion of time elapsed to the next blank
   correctiondat$drift[is.na(correctiondat$drift)] <- 0 # replace the NAN with 0
-  print(correctiondat[, drift_base := Abs_blanks_p-Abs_baseline]) # shows the drift between the baseline and the relevent 'prev blank'
-  print(correctiondat[, Abs_corr := Absorbance+drift-drift_base]) # corrected raw absorbance values calculated based on the absorbance minus the drift between prev and next blanks minus drift between prev blank and the baseline 
+  #print(correctiondat[, drift_base := Abs_blanks_p-Abs_baseline]) # shows the drift between the baseline and the relevent 'prev blank'
+  correctiondat[, drift_base := Abs_blanks_p-Abs_baseline] # calculate the drift between the baseline and the relevent 'prev blank'
+  #print(correctiondat[, Abs_corr := Absorbance+drift-drift_base]) # corrected raw absorbance values calculated based on the absorbance minus the drift between prev and next blanks minus drift between prev blank and the baseline 
+  correctiondat[, Abs_corr := Absorbance+drift-drift_base] # corrected raw absorbance values calculated based on the absorbance minus the drift between prev and next blanks minus drift between prev blank and the baseline 
   correctiondat2 <- correctiondat[Wavelength_nm >=250] # just data between 250-750nm
   correctiondat <- correctiondat[order(Analysis_time)]
   correctiondat2 <- correctiondat2[order(Analysis_time)]
@@ -443,6 +449,8 @@ write_log("Checkpoint 10: drift corrected absorbance data saved")
 ## Note. if a different cell path legth is used (anything other than 10cm) than the factor will need to be adjusted. factor=2.303/path length in meters
 ## spectral slope (S). see C. A. Stedmon and S. Markager / Limnol. Oceanogr., 46(8), 2001, 2087-2093
 ## plots of fit between observed and modelled data (based on S) 
+
+write_log(paste("Now processing data conversions for batch: ", basename(batch_dir)))
   
 rsq <- function(x, y) summary(lm(y~x))$r.squared
 
